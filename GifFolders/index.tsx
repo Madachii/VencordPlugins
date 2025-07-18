@@ -6,56 +6,28 @@
 
 import definePlugin from "@utils/types";
 import { findByPropsLazy, proxyLazyWebpack } from "@webpack";
-import { ContextMenuApi, FluxDispatcher, Menu, React, UserSettingsActionCreators } from "@webpack/common";
+import { ContextMenuApi, FluxDispatcher, Menu, React, RestAPI, UserSettingsActionCreators } from "@webpack/common";
+
+import { DEFAULT_FOLDER_STEP, Folder, Gif, GifMap } from "./classes";
+import { searchProtoClassField } from "./utils";
 
 const FrecencyUserSettingsActionCreators = proxyLazyWebpack(() => UserSettingsActionCreators.FrecencyUserSettingsActionCreators);
 const FavoriteGifSettingsActionCreators = proxyLazyWebpack(() => searchProtoClassField("favoriteGifs", FrecencyUserSettingsActionCreators.ProtoClass));
-
 const BINARY_READ_OPTIONS = findByPropsLazy("readerFactory");
 
-interface Gif {
-    className: string,
-    src: string,
-    url: string,
-    width: number,
-    height: number,
-    format: number,
-    order: number,
-}
 
-interface Folder {
-    id: number;
-    name: string;
-    start: number;
-    end: number;
-}
-
-
-const FOLDER_ORDER_STEP = 10000; // order is a uint32
-const DELAY = 400;
 const defaultFolders: string[] = ["Default", "Hugs", "Kisses", "Hearts"];
-
 const GifFolders: Folder[] = defaultFolders.map((name, id) => {
-    const start = id * FOLDER_ORDER_STEP;
+    const start = id * DEFAULT_FOLDER_STEP + 1;
     return {
         id,
         name,
         start,
-        end: start + FOLDER_ORDER_STEP - 1
+        end: start + DEFAULT_FOLDER_STEP - 1
     };
 });
 
-
-function searchProtoClassField(localName: string, protoClass: any) {
-    const field = protoClass?.fields?.find((field: any) => field.localName === localName);
-    if (!field) return;
-
-    const fieldGetter = Object.values(field).find(value => typeof value === "function") as any;
-    return fieldGetter?.();
-}
-
-
-function grabGifProp(e: React.MouseEvent) {
+function grabGifProp(e: React.UIEvent) {
     const node = e.currentTarget;
     const key = Object.keys(node).find(k => k.startsWith("__reactFiber$")) as string;
     let fiber = node[key];
@@ -70,21 +42,9 @@ function grabGifProp(e: React.MouseEvent) {
     return null;
 }
 
-
-function getFavoritedGifs(): Gif[] | null {
-    const raw = FrecencyUserSettingsActionCreators?.getCurrentValue()?.favoriteGifs?.gifs as Record<string, Gif> | undefined;
-
-    if (!raw) return null;
-
-    return Object.entries(raw).map(([url, data]) => ({
-        url,
-        src: data.src,
-        format: data.format,
-        className: data.className,
-        width: data.width,
-        height: data.height,
-        order: data.order,
-    }));
+function getFavoritedGifs(): GifMap | null {
+    const raw = FrecencyUserSettingsActionCreators?.getCurrentValue()?.favoriteGifs?.gifs;
+    return raw ?? null;
 }
 
 async function updateGifs() {
@@ -110,7 +70,7 @@ async function updateGifs() {
                 height: 282,
                 order: 1
             },
-            "": {
+            "...": {
                 format: 1,
                 src: "",
                 width: 240,
@@ -150,39 +110,30 @@ async function updateGifs() {
 
 }
 
-async function handleGifAdd(folderIdx: number, gif: Gif) { // using incrementing index for now, change later for unique ids or something
-    const folder: Folder = GifFolders[folderIdx];
-    const gifs: Gif[] = getFavoritedGifs() as Gif[];
-    const taken = new Set(gifs.filter(i => i.order >= folder.start && i.order <= folder.end).map(i => i.order));
+// change this to get the last free open index instead
+async function handleGifAdd(folder: Folder, gif: Gif) { // using incrementing index for now, change later for unique ids or something
+    const allGifs: GifMap = await getAllFavoritedGifs() as GifMap;
+    const taken = new Set(
+        Object.values(allGifs)
+            .filter(gif => gif.order >= folder.start && gif.order <= folder.end)
+            .map(gif => gif.order)
+    );
 
-    console.log(gifs);
-
-    let freeSpot = folder.start === 0 ? 1 : folder.start;
-    for (let s = freeSpot; s <= folder.end; s++) {
-        console.log("Trying to check if there's a free spot at: ", s);
+    let order = folder.start === 0 ? 1 : folder.start;
+    for (let s = order; s <= folder.end; s++) {
         if (!taken.has(s)) {
-            freeSpot = s;
+            order = s;
             break;
         }
     }
 
-    const { url, ...gifProps } = gif;
-
-    const newfavoriteGifs = FavoriteGifSettingsActionCreators.create({
-        gifs: {
-            [url]: {
-                ...gifProps,
-                order: freeSpot
-            }
-        },
-        hideTooltip: false
-    });
-
+    const { url, ...rest } = gif;
     await FrecencyUserSettingsActionCreators.updateAsync(
         "favoriteGifs",
-        data => {
-            Object.assign(data.gifs, newfavoriteGifs.gifs);
-            data.hideTooltip = false;
+        proto => {
+            proto.gifs = { ...allGifs };
+            proto.gifs[url as string] = { ...rest, order };
+            proto.hideTooltip = false;
         },
         0 // I'm not sure if this delay is needed
     );
@@ -192,27 +143,27 @@ async function handleGifDelete(gif: Gif) {
     await FrecencyUserSettingsActionCreators.updateAsync(
         "favoriteGifs",
         data => {
-            delete data.gifs[gif.url];
+            delete data.gifs[gif.url as string];
             data.hideTooltip = false;
         },
         0
     );
 }
 
-function GifMenu(gif: Gif) {
+function AddGifMenu(gif) {
     return (
         <Menu.Menu
             navId="madachi-gif-menu"
             onClose={() => FluxDispatcher.dispatch({ type: "CONTEXT_MENU_CLOSE" })}
             aria-label="Madachi Gif Menu"
         >
-            {defaultFolders.map((folder, i) => (
+            {GifFolders.map(folder => (
                 <Menu.MenuItem
-                    key={`folder-${i}`}
-                    id={`favorite-folder-${i}`}
-                    label={`Add ${folder} to favourites`}
+                    key={`folder-${folder.id}`}
+                    id={`favorite-folder-${folder.id}`}
+                    label={`Add ${folder.name} to favourites`}
                     color="brand"
-                    action={() => handleGifAdd(i, gif)}
+                    action={() => handleGifAdd(folder, gif)}
                 />
             ))}
             <Menu.MenuItem
@@ -225,17 +176,39 @@ function GifMenu(gif: Gif) {
     );
 }
 
-function showSelectedGifs() {
+function openGifMenuAsync(e: React.UIEvent): Promise<Folder | null> {
+    return new Promise<Folder | null>(resolve => {
+        ContextMenuApi.openContextMenu(e, () => (
+            <Menu.Menu
+                navId="madachi-gif-menu"
+                aria-label="Madachi Gif Menu"
+                onClose={async () => {
+                    await FluxDispatcher.dispatch({ type: "CONTEXT_MENU_CLOSE" });
+                    resolve(null);
+                }}
+            >
+                {GifFolders.map(folder => (
+                    <Menu.MenuItem
+                        key={`open-folder-${folder.id}`}
+                        id={`open-folder-${folder.id}`}
+                        label={`Open ${folder.name}`}
+                        color="brand"
+                        action={async () => {
+                            await showSelectedGifs(folder);
+                            await FluxDispatcher.dispatch({ type: "CONTEXT_MENU_CLOSE" });
+                            resolve(folder);
+                        }}
+                    />
+                ))}
+            </Menu.Menu>
+        )
+        );
+    });
+}
+function generateProtoFromGifs(gifs) {
     const currentGifsProto = FrecencyUserSettingsActionCreators.getCurrentValue().favoriteGifs;
-    console.log("CurrentGifProto:", currentGifsProto);
+    console.log("Current gif proto", currentGifsProto);
 
-    const filteredGifs = Object.fromEntries(
-        Object.entries(currentGifsProto.gifs as Gif[])
-            .filter(([, { order }]) => order >= 30000 && order <= 40000)
-            .map(([url, data]) => [url, { ...data }])
-    );
-
-    console.log("Filtered gifs:", filteredGifs);
     const newGifProto = currentGifsProto != null
         ? FavoriteGifSettingsActionCreators.fromBinary(
             FavoriteGifSettingsActionCreators.toBinary(currentGifsProto),
@@ -243,12 +216,23 @@ function showSelectedGifs() {
         )
         : FavoriteGifSettingsActionCreators.create();
 
-    newGifProto.gifs = filteredGifs;
+    newGifProto.gifs = gifs;
 
     const proto = FrecencyUserSettingsActionCreators.ProtoClass.create();
     proto.favoriteGifs = newGifProto;
 
-    FluxDispatcher.dispatch({
+    return proto;
+}
+async function showSelectedGifs(folder: Folder) {
+    const allGifs = await getAllFavoritedGifs();
+    const filteredGifs = Object.fromEntries(
+        Object.entries(allGifs as GifMap)
+            .filter(([, { order }]) => order >= folder.start && order <= folder.end)
+            .map(([url, data]) => [url, { ...data }])
+    );
+
+    const proto = generateProtoFromGifs(filteredGifs);
+    await FluxDispatcher.dispatch({
         type: "USER_SETTINGS_PROTO_UPDATE",
         local: true,
         partial: true,
@@ -258,6 +242,23 @@ function showSelectedGifs() {
         }
     });
 }
+
+// Need to use the RestApi because FrecencyUserSettingsActionCreators.getCurrentValue()
+// return the local array of gifs (affected by FluxDispatcher)
+async function getAllFavoritedGifs(): Promise<GifMap> {
+    const { body } = await RestAPI.get({
+        url: "/users/@me/settings-proto/2"
+    });
+
+    const bytes = Uint8Array.from(atob(body.settings), c => c.charCodeAt(0));
+    const end = FrecencyUserSettingsActionCreators.ProtoClass.fromBinary(
+        bytes,
+        BINARY_READ_OPTIONS
+    );
+
+    return end.favoriteGifs.gifs;
+}
+
 export default definePlugin({
     name: "Madachi",
     description: "Makes it possible to organize gifs in folders, currently not working",
@@ -267,10 +268,7 @@ export default definePlugin({
     }],
 
     // add start check to make sure Frequencecy Action Center is there and the others, else no point
-    start() {
-        console.log("Frecency:", FrecencyUserSettingsActionCreators);
-        console.log("Folders", GifFolders);
-    },
+    start() { console.log("Favorite gifs: ", getFavoritedGifs()); },
     patches: [
         {
             find: "gifFavoriteButton,{",
@@ -278,17 +276,41 @@ export default definePlugin({
                 match: /onClick:(\i)/,
                 replace: "onClick:(e)=>( $self.saveGif(e))"
             }
+        },
+        {
+            find: "\"handleCanPlay\",",
+            replacement: {
+                match: /\(\)=>{let[^)]*./,
+                replace: "(event)=>{$self.onGifSelect(event, this.props);"
+            }
         }
     ],
 
-    saveGif(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) {
+    async saveGif(e: React.UIEvent) {
         e.preventDefault();
         e.stopPropagation();
         e.persist();
 
+
         const favoritedGif: Gif = grabGifProp(e);
-        ContextMenuApi.openContextMenu(e, () => GifMenu(favoritedGif));
-        showSelectedGifs();
+        console.log("favoritedGifs", favoritedGif);
+        ContextMenuApi.openContextMenu(e, () => AddGifMenu(favoritedGif));
+        // showSelectedGifs();
+        // console.log(getFavoritedGifs());
+        const full = await getAllFavoritedGifs();
+        console.log("Full is: ", full);
+
+    },
+
+    async onGifSelect(e: React.UIEvent, props) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.persist();
+
+        const { type, name } = props.item;
+        if (type === "Favorites" && name === "Favorites") {
+            await openGifMenuAsync(e);
+        }
+        props.onClick !== null && props.onClick(props.item, props.index); // original function
     }
 });
-

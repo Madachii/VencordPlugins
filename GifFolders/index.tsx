@@ -111,21 +111,15 @@ async function updateGifs() {
 }
 
 // change this to get the last free open index instead
+// would it work to Set the values so the editing person can change folders easily?
 async function handleGifAdd(folder: Folder, gif: Gif) { // using incrementing index for now, change later for unique ids or something
     const allGifs: GifMap = await getAllFavoritedGifs() as GifMap;
-    const taken = new Set(
-        Object.values(allGifs)
-            .filter(gif => gif.order >= folder.start && gif.order <= folder.end)
-            .map(gif => gif.order)
-    );
+    const highestGif = Object.values(allGifs)
+        .filter(gif => gif.order >= folder.start && gif.order < folder.end)
+        .reduce((highest, gif) => highest.order > gif.order ? highest : gif);
 
-    let order = folder.start === 0 ? 1 : folder.start;
-    for (let s = order; s <= folder.end; s++) {
-        if (!taken.has(s)) {
-            order = s;
-            break;
-        }
-    }
+    const order = highestGif.order + 1;
+    if (order >= folder.end) return; // Should normally almost never reach this, but just in case...
 
     const { url, ...rest } = gif;
     await FrecencyUserSettingsActionCreators.updateAsync(
@@ -268,7 +262,7 @@ export default definePlugin({
     }],
 
     // add start check to make sure Frequencecy Action Center is there and the others, else no point
-    start() { console.log("Favorite gifs: ", getFavoritedGifs()); },
+    start() { },
     patches: [
         {
             find: "gifFavoriteButton,{",

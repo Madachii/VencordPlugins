@@ -114,11 +114,11 @@ async function updateGifs() {
 // would it work to Set the values so the editing person can change folders easily?
 async function handleGifAdd(folder: Folder, gif: Gif) { // using incrementing index for now, change later for unique ids or something
     const allGifs: GifMap = await getAllFavoritedGifs() as GifMap;
-    const highestGif = Object.values(allGifs)
+    const highestOrder = Object.values(allGifs)
         .filter(gif => gif.order >= folder.start && gif.order < folder.end)
-        .reduce((highest, gif) => highest.order > gif.order ? highest : gif);
+        .reduce((highest, gif) => highest > gif.order ? highest : gif.order, folder.start - 1);
 
-    const order = highestGif.order + 1;
+    const order = highestOrder + 1;
     if (order >= folder.end) return; // Should normally almost never reach this, but just in case...
 
     const { url, ...rest } = gif;
@@ -133,12 +133,25 @@ async function handleGifAdd(folder: Folder, gif: Gif) { // using incrementing in
     );
 }
 
+// add length checks
 async function handleGifDelete(gif: Gif) {
+    if (gif?.url === undefined) {
+        console.log("Received invalid gif");
+        return;
+    }
+
+    const allGifs: GifMap = await getAllFavoritedGifs() as GifMap;
+    if (!(gif.url in allGifs)) {
+        console.log("Gif not found in the whole gif object!");
+        return;
+    }
+
     await FrecencyUserSettingsActionCreators.updateAsync(
         "favoriteGifs",
-        data => {
-            delete data.gifs[gif.url as string];
-            data.hideTooltip = false;
+        proto => {
+            proto.gifs = { ...allGifs };
+            delete proto.gifs[gif.url as string];
+            proto.hideTooltip = false; // im not even sure if this is neeed
         },
         0
     );

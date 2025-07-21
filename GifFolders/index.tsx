@@ -4,9 +4,11 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { ApplicationCommandInputType, ApplicationCommandOptionType, sendBotMessage } from "@api/Commands";
+import * as DataStore from "@api/DataStore";
 import definePlugin from "@utils/types";
 import { findByPropsLazy, proxyLazyWebpack } from "@webpack";
-import { ContextMenuApi, FluxDispatcher, Menu, React, RestAPI, UserSettingsActionCreators } from "@webpack/common";
+import { ContextMenuApi, FluxDispatcher, Menu, React, RestAPI, UserSettingsActionCreators, UserStore } from "@webpack/common";
 
 import { DEFAULT_FOLDER_STEP, Folder, Gif, GifMap } from "./classes";
 import { searchProtoClassField } from "./utils";
@@ -15,17 +17,8 @@ const FrecencyUserSettingsActionCreators = proxyLazyWebpack(() => UserSettingsAc
 const FavoriteGifSettingsActionCreators = proxyLazyWebpack(() => searchProtoClassField("favoriteGifs", FrecencyUserSettingsActionCreators.ProtoClass));
 const BINARY_READ_OPTIONS = findByPropsLazy("readerFactory");
 
+let FOLDERS: Map<string, Folder> = new Map<string, Folder>();
 
-const defaultFolders: string[] = ["Default", "Hugs", "Kisses", "Hearts"];
-const GifFolders: Folder[] = defaultFolders.map((name, id) => {
-    const start = id * DEFAULT_FOLDER_STEP + 1;
-    return {
-        id,
-        name,
-        start,
-        end: start + DEFAULT_FOLDER_STEP - 1
-    };
-});
 
 function grabGifProp(e: React.UIEvent) {
     const node = e.currentTarget;
@@ -42,72 +35,9 @@ function grabGifProp(e: React.UIEvent) {
     return null;
 }
 
-function getFavoritedGifs(): GifMap | null {
+function getCurrentFavoritedGifs(): GifMap | null {
     const raw = FrecencyUserSettingsActionCreators?.getCurrentValue()?.favoriteGifs?.gifs;
     return raw ?? null;
-}
-
-async function updateGifs() {
-    console.log("Starting madachi's plugin! With love for Namel3ss :3");
-    console.log("Frecency:", FrecencyUserSettingsActionCreators);
-
-    const currentGifs =
-        FrecencyUserSettingsActionCreators.getCurrentValue().favoriteGifs;
-
-    const newGifProto = currentGifs != null
-        ? FavoriteGifSettingsActionCreators.fromBinary(
-            FavoriteGifSettingsActionCreators.toBinary(currentGifs),
-            BINARY_READ_OPTIONS,
-        )
-        : FavoriteGifSettingsActionCreators.create();
-
-    const newfavoriteGifs = FavoriteGifSettingsActionCreators.create({
-        gifs: {
-            "": {
-                format: 2,
-                src: "",
-                width: 498,
-                height: 282,
-                order: 1
-            },
-            "...": {
-                format: 1,
-                src: "",
-                width: 240,
-                height: 426,
-                order: 2500
-            }
-        },
-        hideTooltip: false
-    });
-
-    newGifProto.gifs = newfavoriteGifs.gifs;
-    newGifProto.hideTooltip = newfavoriteGifs.hideTooltip;
-
-    const proto = FrecencyUserSettingsActionCreators.ProtoClass.create();
-    proto.favoriteGifs = newGifProto;
-
-    console.log("Our proto is: ", proto);
-
-    // const result = FluxDispatcher.dispatch({
-    //     type: "USER_SETTINGS_PROTO_UPDATE",
-    //     local: false,
-    //     partial: true,
-    //     settings: {
-    //         type: 2,
-    //         proto: proto
-    //     }
-    // });
-    await FrecencyUserSettingsActionCreators.updateAsync(
-        "favoriteGifs",
-        data => {
-            Object.assign(data.gifs, newfavoriteGifs.gifs);
-            data.hideTooltip = false;
-        },
-        0
-    );
-    // console.log("Post Dispatch", result);
-
 }
 
 // change this to get the last free open index instead
@@ -157,17 +87,19 @@ async function handleGifDelete(gif: Gif) {
     );
 }
 
-function AddGifMenu(gif) {
-    return (
+function openAddGifMenu(e: React.UIEvent, gif) {
+    const folderList = Array.from(FOLDERS.values()); // not sure why, but using forEach makes the element disappear on hover
+
+    ContextMenuApi.openContextMenu(e, () => (
         <Menu.Menu
             navId="madachi-gif-menu"
             onClose={() => FluxDispatcher.dispatch({ type: "CONTEXT_MENU_CLOSE" })}
             aria-label="Madachi Gif Menu"
         >
-            {GifFolders.map(folder => (
+            {folderList.map(folder => (
                 <Menu.MenuItem
-                    key={`folder-${folder.id}`}
-                    id={`favorite-folder-${folder.id}`}
+                    key={`folder-${folder.name}`}
+                    id={`favorite-folder-${folder.name}`}
                     label={`Add ${folder.name} to favourites`}
                     color="brand"
                     action={() => handleGifAdd(folder, gif)}
@@ -180,10 +112,12 @@ function AddGifMenu(gif) {
                 action={() => handleGifDelete(gif)}
             />
         </Menu.Menu>
-    );
+    ));
 }
 
 function openGifMenuAsync(e: React.UIEvent): Promise<Folder | null> {
+    const folderList = Array.from(FOLDERS.values()); // not sure why, but using forEach makes the element disappear on hover
+
     return new Promise<Folder | null>(resolve => {
         ContextMenuApi.openContextMenu(e, () => (
             <Menu.Menu
@@ -194,10 +128,10 @@ function openGifMenuAsync(e: React.UIEvent): Promise<Folder | null> {
                     resolve(null);
                 }}
             >
-                {GifFolders.map(folder => (
+                {folderList.map(folder => (
                     <Menu.MenuItem
-                        key={`open-folder-${folder.id}`}
-                        id={`open-folder-${folder.id}`}
+                        key={`open-folder-${folder.name}`}
+                        id={`open-folder-${folder.name}`}
                         label={`Open ${folder.name}`}
                         color="brand"
                         action={async () => {
@@ -212,16 +146,17 @@ function openGifMenuAsync(e: React.UIEvent): Promise<Folder | null> {
         );
     });
 }
+
 function generateProtoFromGifs(gifs) {
     const currentGifsProto = FrecencyUserSettingsActionCreators.getCurrentValue().favoriteGifs;
-    console.log("Current gif proto", currentGifsProto);
 
-    const newGifProto = currentGifsProto != null
-        ? FavoriteGifSettingsActionCreators.fromBinary(
+
+    const newGifProto = currentGifsProto !== null ?
+        FavoriteGifSettingsActionCreators.fromBinary(
             FavoriteGifSettingsActionCreators.toBinary(currentGifsProto),
             BINARY_READ_OPTIONS,
-        )
-        : FavoriteGifSettingsActionCreators.create();
+        ) :
+        FavoriteGifSettingsActionCreators.create();
 
     newGifProto.gifs = gifs;
 
@@ -266,6 +201,47 @@ async function getAllFavoritedGifs(): Promise<GifMap> {
     return end.favoriteGifs.gifs;
 }
 
+async function AddFolder(opts, cmd) {
+    if (opts.length < 1) return;
+
+    const { name, value } = opts[0];
+    if (name !== "add_folder") return;
+
+    if (FOLDERS.get(value)) {
+        cmd?.channel?.id && sendBotMessage(cmd.channel.id, { content: `You already have a folder called ${value}!: ` });
+        return;
+    }
+
+    const folder = {
+        idx: FOLDERS.size,
+        name: value,
+        start: FOLDERS.size * DEFAULT_FOLDER_STEP + 1,
+        end: FOLDERS.size * DEFAULT_FOLDER_STEP + DEFAULT_FOLDER_STEP
+    };
+
+    FOLDERS.set(value, folder);
+    DataStore.set(`GifFolders:${UserStore.getCurrentUser().id}`, Object.fromEntries(FOLDERS));
+
+    cmd?.channel?.id && sendBotMessage(cmd.channel.id, { content: `Succesfully created a new folder called: ${value}! ` });
+}
+
+async function DeleteFolder(opts, cmd) {
+    if (opts.length < 1) return;
+
+    const { name, value } = opts[0];
+    if (name !== "delete_folder" || value === "Default") {
+        cmd?.channel?.id && sendBotMessage(cmd.channel.id, { content: "Cannot delete the Default folder!" });
+    }
+
+    if (FOLDERS.delete(value)) {
+        DataStore.set(`GifFolders:${UserStore.getCurrentUser().id}`, Object.fromEntries(FOLDERS));
+        cmd?.channel?.id && sendBotMessage(cmd.channel.id, { content: `Succesfully deleted the folder: ${value}! ` });
+    }
+    else {
+        cmd?.channel?.id && sendBotMessage(cmd.channel.id, { content: `Failed to delete folder ${value}, are you sure it exists?` });
+    }
+}
+
 export default definePlugin({
     name: "Madachi",
     description: "Makes it possible to organize gifs in folders, currently not working",
@@ -273,9 +249,48 @@ export default definePlugin({
         name: "You!",
         id: 0n
     }],
+    commands: [
+        {
+            inputType: ApplicationCommandInputType.BUILT_IN,
+            name: "AddFolder",
+            description: "Add a new gif folder!",
+            options: [
+                {
+                    name: "add_folder",
+                    description: "Give the folder a name!",
+                    type: ApplicationCommandOptionType.STRING
+                },
+            ],
+            execute: async (opts, cmd) => AddFolder(opts, cmd),
+        },
+        {
+            inputType: ApplicationCommandInputType.BUILT_IN,
+            name: "DeleteFolder",
+            description: "Delete a existing folder!",
+            options: [
+                {
+                    name: "delete_folder",
+                    description: "Write the name of the folder you want to delete", // maybe could list the map?
+                    type: ApplicationCommandOptionType.STRING
+                },
+            ],
+            execute: async (opts, cmd) => DeleteFolder(opts, cmd),
+        },
+    ],
 
     // add start check to make sure Frequencecy Action Center is there and the others, else no point
-    start() { },
+    async start() {
+        console.log("DATA STORE: ", DataStore);
+        const key = `GifFolders:${UserStore.getCurrentUser().id}`;
+        const storedFolders = await DataStore.get(key);
+
+        if (!storedFolders || Object.keys(storedFolders).length === 0) {
+            await AddFolder([{ name: "add_folder", value: "Default" }]);
+            return;
+        }
+        FOLDERS = new Map(Object.entries(storedFolders ?? {}));
+    },
+
     patches: [
         {
             find: "gifFavoriteButton,{",
@@ -293,26 +308,17 @@ export default definePlugin({
         }
     ],
 
+    // restore default if folder missing etc
     async saveGif(e: React.UIEvent) {
         e.preventDefault();
         e.stopPropagation();
-        e.persist();
 
-
-        const favoritedGif: Gif = grabGifProp(e);
-        console.log("favoritedGifs", favoritedGif);
-        ContextMenuApi.openContextMenu(e, () => AddGifMenu(favoritedGif));
-        // showSelectedGifs();
-        // console.log(getFavoritedGifs());
-        const full = await getAllFavoritedGifs();
-        console.log("Full is: ", full);
-
+        openAddGifMenu(e, grabGifProp(e));
     },
 
     async onGifSelect(e: React.UIEvent, props) {
         e.preventDefault();
         e.stopPropagation();
-        e.persist();
 
         const { type, name } = props.item;
         if (type === "Favorites" && name === "Favorites") {
@@ -321,3 +327,5 @@ export default definePlugin({
         props.onClick !== null && props.onClick(props.item, props.index); // original function
     }
 });
+
+

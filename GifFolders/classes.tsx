@@ -17,7 +17,7 @@ export type GifMap = Record<string, Gif>;
 
 export const DEFAULT_FOLDER_STEP = 10000;
 export interface Folder {
-    id: number;
+    idx: number;
     name: string;
     start: number;
     end: number;

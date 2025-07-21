@@ -13,18 +13,21 @@ import { ContextMenuApi, FluxDispatcher, Menu, React, RestAPI, UserSettingsActio
 import { DEFAULT_FOLDER_STEP, Folder, Gif, GifMap } from "./classes";
 import { searchProtoClassField } from "./utils";
 
-const FrecencyUserSettingsActionCreators = proxyLazyWebpack(() => UserSettingsActionCreators.FrecencyUserSettingsActionCreators);
-const FavoriteGifSettingsActionCreators = proxyLazyWebpack(() => searchProtoClassField("favoriteGifs", FrecencyUserSettingsActionCreators.ProtoClass));
+const FrecencyAC = proxyLazyWebpack(() => UserSettingsActionCreators.FrecencyUserSettingsActionCreators);
+const FavoriteAC = proxyLazyWebpack(() => searchProtoClassField("favoriteGifs", FrecencyAC.ProtoClass));
 const BINARY_READ_OPTIONS = findByPropsLazy("readerFactory");
 
-let FOLDERS: Map<string, Folder> = new Map<string, Folder>();
+const FOLDERS: Map<string, Folder> = new Map<string, Folder>();
+
+let IS_READY = true;
 
 
-function grabGifProp(e: React.UIEvent) {
+function grabGifProp(e: React.UIEvent): Gif | null {
     const node = e.currentTarget;
-    const key = Object.keys(node).find(k => k.startsWith("__reactFiber$")) as string;
-    let fiber = node[key];
+    const key = Object.keys(node).find(k => k.startsWith("__reactFiber$"));
+    if (!key || !(key in node)) return null;
 
+    let fiber = node[key];
     while (fiber) {
         const props = fiber.memoizedProps || fiber.pendingProps;
         if (props?.gif || (props?.src && props?.url)) {
@@ -35,28 +38,30 @@ function grabGifProp(e: React.UIEvent) {
     return null;
 }
 
-function getCurrentFavoritedGifs(): GifMap | null {
-    const raw = FrecencyUserSettingsActionCreators?.getCurrentValue()?.favoriteGifs?.gifs;
-    return raw ?? null;
-}
-
 // change this to get the last free open index instead
 // would it work to Set the values so the editing person can change folders easily?
 async function handleGifAdd(folder: Folder, gif: Gif) { // using incrementing index for now, change later for unique ids or something
-    const allGifs: GifMap = await getAllFavoritedGifs() as GifMap;
-    const highestOrder = Object.values(allGifs)
-        .filter(gif => gif.order >= folder.start && gif.order < folder.end)
-        .reduce((highest, gif) => highest > gif.order ? highest : gif.order, folder.start - 1);
-
-    const order = highestOrder + 1;
-    if (order >= folder.end) return; // Should normally almost never reach this, but just in case...
+    const allGifs: GifMap | null = await getAllFavoritedGifs();
+    if (!allGifs) {
+        console.log("Failed to grab all gifs!");
+        return;
+    }
 
     const { url, ...rest } = gif;
-    await FrecencyUserSettingsActionCreators.updateAsync(
+    if (!url) {
+        console.log("Failed to find the url in the gif...");
+        return;
+    }
+
+    await FrecencyAC.updateAsync(
         "favoriteGifs",
         proto => {
+            const highestOrder = Object.values(allGifs)
+                .filter(gif => gif.order >= folder.start && gif.order < folder.end)
+                .reduce((highest, gif) => highest > gif.order ? highest : gif.order, folder.start - 1);
+
             proto.gifs = { ...allGifs };
-            proto.gifs[url as string] = { ...rest, order };
+            proto.gifs[url] = { ...rest, order: highestOrder + 1 };
             proto.hideTooltip = false;
         },
         0 // I'm not sure if this delay is needed
@@ -70,13 +75,18 @@ async function handleGifDelete(gif: Gif) {
         return;
     }
 
-    const allGifs: GifMap = await getAllFavoritedGifs() as GifMap;
+    const allGifs: GifMap | null = await getAllFavoritedGifs();
+    if (!allGifs) {
+        console.log("Failed to grab all gifs!");
+        return;
+    }
+
     if (!(gif.url in allGifs)) {
         console.log("Gif not found in the whole gif object!");
         return;
     }
 
-    await FrecencyUserSettingsActionCreators.updateAsync(
+    await FrecencyAC.updateAsync(
         "favoriteGifs",
         proto => {
             proto.gifs = { ...allGifs };
@@ -100,7 +110,7 @@ function openAddGifMenu(e: React.UIEvent, gif) {
                 <Menu.MenuItem
                     key={`folder-${folder.name}`}
                     id={`favorite-folder-${folder.name}`}
-                    label={`Add ${folder.name} to favourites`}
+                    label={`Add to ${folder.name}`}
                     color="brand"
                     action={() => handleGifAdd(folder, gif)}
                 />
@@ -115,17 +125,17 @@ function openAddGifMenu(e: React.UIEvent, gif) {
     ));
 }
 
-function openGifMenuAsync(e: React.UIEvent): Promise<Folder | null> {
+function openGifMenuAsync(e: React.UIEvent): Promise<void> {
     const folderList = Array.from(FOLDERS.values()); // not sure why, but using forEach makes the element disappear on hover
 
-    return new Promise<Folder | null>(resolve => {
+    return new Promise<void>(resolve => {
         ContextMenuApi.openContextMenu(e, () => (
             <Menu.Menu
                 navId="madachi-gif-menu"
                 aria-label="Madachi Gif Menu"
                 onClose={async () => {
                     await FluxDispatcher.dispatch({ type: "CONTEXT_MENU_CLOSE" });
-                    resolve(null);
+                    resolve();
                 }}
             >
                 {folderList.map(folder => (
@@ -136,8 +146,7 @@ function openGifMenuAsync(e: React.UIEvent): Promise<Folder | null> {
                         color="brand"
                         action={async () => {
                             await showSelectedGifs(folder);
-                            await FluxDispatcher.dispatch({ type: "CONTEXT_MENU_CLOSE" });
-                            resolve(folder);
+                            resolve();
                         }}
                     />
                 ))}
@@ -148,32 +157,47 @@ function openGifMenuAsync(e: React.UIEvent): Promise<Folder | null> {
 }
 
 function generateProtoFromGifs(gifs) {
-    const currentGifsProto = FrecencyUserSettingsActionCreators.getCurrentValue().favoriteGifs;
+    const proto = FrecencyAC.ProtoClass.create();
+    if (!gifs || Object.keys(gifs).length === 0) {
+        proto.favoriteGifs = { gifs: {} };
+        return proto;
+    }
 
+    const currentGifsProto = FrecencyAC.getCurrentValue().favoriteGifs;
 
     const newGifProto = currentGifsProto !== null ?
-        FavoriteGifSettingsActionCreators.fromBinary(
-            FavoriteGifSettingsActionCreators.toBinary(currentGifsProto),
+        FavoriteAC.fromBinary(
+            FavoriteAC.toBinary(currentGifsProto),
             BINARY_READ_OPTIONS,
         ) :
-        FavoriteGifSettingsActionCreators.create();
+        FavoriteAC.create();
 
     newGifProto.gifs = gifs;
-
-    const proto = FrecencyUserSettingsActionCreators.ProtoClass.create();
     proto.favoriteGifs = newGifProto;
 
     return proto;
 }
 async function showSelectedGifs(folder: Folder) {
-    const allGifs = await getAllFavoritedGifs();
+    if (!folder) {
+        console.log("Got a undefined folder!");
+        return;
+    }
+
+    const allGifs: GifMap | null = await getAllFavoritedGifs();
+    if (!allGifs) {
+        console.log("Failed to get all gifs!");
+        return;
+    }
+
     const filteredGifs = Object.fromEntries(
         Object.entries(allGifs as GifMap)
-            .filter(([, { order }]) => order >= folder.start && order <= folder.end)
+            .filter(([, { order }]) => order >= folder.start && order < folder.end)
             .map(([url, data]) => [url, { ...data }])
     );
 
     const proto = generateProtoFromGifs(filteredGifs);
+
+    console.log(" OUR NEW PROTO TO SHOW: ", proto);
     await FluxDispatcher.dispatch({
         type: "USER_SETTINGS_PROTO_UPDATE",
         local: true,
@@ -185,24 +209,30 @@ async function showSelectedGifs(folder: Folder) {
     });
 }
 
-// Need to use the RestApi because FrecencyUserSettingsActionCreators.getCurrentValue()
+// Need to use the RestApi because FrecencyAC.getCurrentValue()
 // return the local array of gifs (affected by FluxDispatcher)
-async function getAllFavoritedGifs(): Promise<GifMap> {
-    const { body } = await RestAPI.get({
+async function getAllFavoritedGifs(): Promise<GifMap | null> {
+    const { ok, status, body } = await RestAPI.get({
         url: "/users/@me/settings-proto/2"
     });
 
+    if (!ok || status !== 200 || !body?.settings)
+        return null;
+
     const bytes = Uint8Array.from(atob(body.settings), c => c.charCodeAt(0));
-    const end = FrecencyUserSettingsActionCreators.ProtoClass.fromBinary(
+    const end = FrecencyAC.ProtoClass.fromBinary(
         bytes,
         BINARY_READ_OPTIONS
     );
+
+    if (!end.favoriteGifs || !end.favoriteGifs.gifs)
+        return null;
 
     return end.favoriteGifs.gifs;
 }
 
 async function AddFolder(opts, cmd) {
-    if (opts.length < 1) return;
+    if (!opts || !cmd || opts.length < 1) return;
 
     const { name, value } = opts[0];
     if (name !== "add_folder") return;
@@ -229,8 +259,10 @@ async function DeleteFolder(opts, cmd) {
     if (opts.length < 1) return;
 
     const { name, value } = opts[0];
-    if (name !== "delete_folder" || value === "Default") {
+    if (name !== "delete_folder") return;
+    if (value === "Default") {
         cmd?.channel?.id && sendBotMessage(cmd.channel.id, { content: "Cannot delete the Default folder!" });
+        return;
     }
 
     if (FOLDERS.delete(value)) {
@@ -242,6 +274,23 @@ async function DeleteFolder(opts, cmd) {
     }
 }
 
+async function initializeFolder() {
+    const key = `GifFolders:${UserStore.getCurrentUser().id}`;
+    const storedFolders = await DataStore.get(key);
+
+    if (!storedFolders || !storedFolders.Default || Object.keys(storedFolders).length === 0) {
+        await AddFolder([{ name: "add_folder", value: "Default" }], null);
+        return;
+    }
+
+    const defaultFolder = storedFolders.Default as Folder;
+    FOLDERS.set("Default", defaultFolder);
+    for (const [key, value] of Object.entries(storedFolders)) {
+        if (key !== "Default") FOLDERS.set(key, value);
+    }
+
+
+}
 export default definePlugin({
     name: "Madachi",
     description: "Makes it possible to organize gifs in folders, currently not working",
@@ -280,15 +329,14 @@ export default definePlugin({
 
     // add start check to make sure Frequencecy Action Center is there and the others, else no point
     async start() {
-        console.log("DATA STORE: ", DataStore);
-        const key = `GifFolders:${UserStore.getCurrentUser().id}`;
-        const storedFolders = await DataStore.get(key);
-
-        if (!storedFolders || Object.keys(storedFolders).length === 0) {
-            await AddFolder([{ name: "add_folder", value: "Default" }]);
+        if (!FrecencyAC || !FavoriteAC || !BINARY_READ_OPTIONS || UserStore) {
+            IS_READY = false;
             return;
         }
-        FOLDERS = new Map(Object.entries(storedFolders ?? {}));
+
+        await initializeFolder();
+        if (!FOLDERS || FOLDERS.size === 0)
+            IS_READY = false;
     },
 
     patches: [
@@ -296,36 +344,44 @@ export default definePlugin({
             find: "gifFavoriteButton,{",
             replacement: {
                 match: /onClick:(\i)/,
-                replace: "onClick:(e)=>( $self.saveGif(e))"
+                replace: "onClick:(e)=>($self.saveGif(e, $1))"
             }
         },
         {
             find: "\"handleCanPlay\",",
             replacement: {
-                match: /\(\)=>{let[^)]*./,
+                match: /\(\)=>{let[^)]*./, // change this to reduce chance of corruption
                 replace: "(event)=>{$self.onGifSelect(event, this.props);"
             }
         }
     ],
 
     // restore default if folder missing etc
-    async saveGif(e: React.UIEvent) {
+    async saveGif(e: React.UIEvent, original) {
+        if (!IS_READY) return original(e);
+
+        const gif = grabGifProp(e);
+        if (!gif) return original(e);
+
         e.preventDefault();
         e.stopPropagation();
 
-        openAddGifMenu(e, grabGifProp(e));
+        openAddGifMenu(e, gif);
     },
 
     async onGifSelect(e: React.UIEvent, props) {
-        e.preventDefault();
-        e.stopPropagation();
-
         const { type, name } = props.item;
-        if (type === "Favorites" && name === "Favorites") {
+
+        const shouldHandle = IS_READY && type === "Favorites" && name === "Favorites";
+        if (shouldHandle) {
+            e.preventDefault();
+            e.stopPropagation();
             await openGifMenuAsync(e);
         }
-        props.onClick !== null && props.onClick(props.item, props.index); // original function
+
+        props.onClick?.(props.item, props.index); // original function
     }
-});
+}
+);
 
 

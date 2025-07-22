@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+export const DEFAULT_FOLDER_STEP = 10000;
+
 export interface Gif {
     url?: string,
     className: string,
@@ -13,9 +15,6 @@ export interface Gif {
     format: number,
     order: number,
 }
-export type GifMap = Record<string, Gif>;
-
-export const DEFAULT_FOLDER_STEP = 10000;
 export interface Folder {
     idx: number;
     name: string;

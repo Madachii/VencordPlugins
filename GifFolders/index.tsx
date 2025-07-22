@@ -20,9 +20,9 @@ const BINARY_READ_OPTIONS = findByPropsLazy("readerFactory");
 
 const FOLDERS: Map<string, Folder> = new Map<string, Folder>();
 
+let LAST_VISITED_FOLDER: Folder;
 let IS_READY = true;
 let GIF_PICKER_CALLBACK;
-let TO_BE_UPDATED;
 
 
 function grabGifProp(e: React.UIEvent): Gif | null {
@@ -45,11 +45,7 @@ function grabGifProp(e: React.UIEvent): Gif | null {
 // would it work to Set the values so the editing person can change folders easily?
 async function handleGifAdd(folder: Folder, gif: Gif) { // using incrementing index for now, change later for unique ids or something
     const key = `GifFolders:gifs:${UserStore.getCurrentUser().id}`;
-    const allGifs_db = DataStore.get(key);
-
-
-
-    const allGifs: Record<string, Gif> | null = await getAllFavoritedGifs();
+    const allGifs: Record<string, Gif> | undefined = await getAllFavoritedGifsFromDB(key);
     if (!allGifs) {
         console.log("Failed to grab all gifs!");
         return;
@@ -61,29 +57,23 @@ async function handleGifAdd(folder: Folder, gif: Gif) { // using incrementing in
         return;
     }
 
-    await FrecencyAC.updateAsync(
-        "favoriteGifs",
-        proto => {
-            const highestOrder = Object.values(allGifs)
-                .filter(gif => gif.order >= folder.start && gif.order < folder.end)
-                .reduce((highest, gif) => highest > gif.order ? highest : gif.order, folder.start - 1);
+    const highestOrder = Object.values(allGifs)
+        .filter(gif => gif.order >= folder.start && gif.order < folder.end)
+        .reduce((highest, gif) => highest > gif.order ? highest : gif.order, folder.start - 1);
 
-            proto.gifs = { ...allGifs };
-            proto.gifs[url] = { ...rest, order: highestOrder + 1 };
-            proto.hideTooltip = false;
-        },
-        0 // I'm not sure if this delay is needed
-    );
+    allGifs[url] = { ...rest, order: highestOrder };
+    await DataStore.set(key, allGifs);
+    showSelectedGifs(LAST_VISITED_FOLDER);
 }
 
-// add length checks
 async function handleGifDelete(gif: Gif) {
     if (gif?.url === undefined) {
         console.log("Received invalid gif");
         return;
     }
 
-    const allGifs: Record<string, Gif> | null = await getAllFavoritedGifs();
+    const key = `GifFolders:gifs:${UserStore.getCurrentUser().id}`;
+    const allGifs: Record<string, Gif> | undefined = await getAllFavoritedGifsFromDB(key);
     if (!allGifs) {
         console.log("Failed to grab all gifs!");
         return;
@@ -94,15 +84,9 @@ async function handleGifDelete(gif: Gif) {
         return;
     }
 
-    await FrecencyAC.updateAsync(
-        "favoriteGifs",
-        proto => {
-            proto.gifs = { ...allGifs };
-            delete proto.gifs[gif.url as string];
-            proto.hideTooltip = false; // im not even sure if this is neeed
-        },
-        0
-    );
+    delete allGifs[gif.url];
+    DataStore.set(key, allGifs); // continue modifying this
+    showSelectedGifs(LAST_VISITED_FOLDER);
 }
 
 function openAddGifMenu(e: React.UIEvent, gif: Gif): Promise<Folder> {
@@ -159,6 +143,7 @@ function openGifMenuAsync(e: React.UIEvent): Promise<void> {
                         color="brand"
                         action={async () => {
                             await showSelectedGifs(folder);
+                            LAST_VISITED_FOLDER = folder;
                             resolve();
                         }}
                     />
@@ -191,7 +176,8 @@ function generateProtoFromGifs(gifs: Record<string, Gif>) {
     return proto;
 }
 async function showSelectedGifs(folder?: Folder | null) {
-    const allGifs: Record<string, Gif> | null = await getAllFavoritedGifs();
+    const key = `GifFolders:gifs:${UserStore.getCurrentUser().id}`;
+    const allGifs: Record<string, Gif> | undefined = await getAllFavoritedGifsFromDB(key);
     if (!allGifs) {
         console.log("Failed to get all gifs!");
         return;
@@ -209,7 +195,6 @@ async function showSelectedGifs(folder?: Folder | null) {
     }
 
     const proto = generateProtoFromGifs(filteredGifs);
-    console.log("PROTO IS: ", proto);
     await FluxDispatcher.dispatch({
         type: "USER_SETTINGS_PROTO_UPDATE",
         local: true,
@@ -243,6 +228,17 @@ async function getAllFavoritedGifs(): Promise<Record<string, Gif> | null> {
 
     return end.favoriteGifs.gifs;
 }
+
+async function getAllFavoritedGifsFromDB(key: string): Promise<Record<string, Gif> | undefined> {
+    const storedGifs: Record<string, Gif> | undefined = await DataStore.get(key);
+    if (!storedGifs) {
+        console.log("Failed to get the gifs from DB");
+        return;
+    }
+
+    return storedGifs;
+}
+
 
 async function AddFolder(opts: CommandArgument[], cmd: CommandContext) {
     if (!opts || !cmd || opts.length < 1) return;
@@ -325,6 +321,7 @@ async function initializeGifs() {
     }
 
     await DataStore.set(key, storedGifs);
+    console.log(DataStore);
 }
 
 export default definePlugin({

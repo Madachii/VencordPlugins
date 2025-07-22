@@ -22,6 +22,7 @@ const FOLDERS: Map<string, Folder> = new Map<string, Folder>();
 
 let IS_READY = true;
 let GIF_PICKER_CALLBACK;
+let TO_BE_UPDATED;
 
 
 function grabGifProp(e: React.UIEvent): Gif | null {
@@ -43,6 +44,11 @@ function grabGifProp(e: React.UIEvent): Gif | null {
 // change this to get the last free open index instead
 // would it work to Set the values so the editing person can change folders easily?
 async function handleGifAdd(folder: Folder, gif: Gif) { // using incrementing index for now, change later for unique ids or something
+    const key = `GifFolders:gifs:${UserStore.getCurrentUser().id}`;
+    const allGifs_db = DataStore.get(key);
+
+
+
     const allGifs: Record<string, Gif> | null = await getAllFavoritedGifs();
     if (!allGifs) {
         console.log("Failed to grab all gifs!");
@@ -117,7 +123,7 @@ function openAddGifMenu(e: React.UIEvent, gif: Gif): Promise<Folder> {
                         label={`Add to ${folder.name}`}
                         color="brand"
                         action={async () => {
-                            await handleGifAdd(folder, gif);
+                            handleGifAdd(folder, gif);
                             resolve(folder);
                         }}
                     />
@@ -283,7 +289,7 @@ async function DeleteFolder(opts: CommandArgument[], cmd: CommandContext) {
 
 async function initializeFolder() {
     const key = `GifFolders:${UserStore.getCurrentUser().id}`;
-    const storedFolders: Record<string, Folder> = await DataStore.get(key) as Record<string, Folder>;
+    const storedFolders: Record<string, Folder> = await DataStore.get(key) ?? {};
 
     if (!storedFolders || !storedFolders.Default || Object.keys(storedFolders).length === 0) {
         await AddFolder([{ name: "add_folder", value: "Default" }], null);
@@ -298,6 +304,27 @@ async function initializeFolder() {
     }
 
 
+}
+
+// So we are not going to modify the users gif, instead we are going to add everything they have
+// and then fully use the Vencord db module
+async function initializeGifs() {
+    const allGifs: Record<string, Gif> | null = await getAllFavoritedGifs();
+    if (!allGifs || Object.keys(allGifs).length === 0) {
+        console.log("Failed to get all gifs or you don't have any gifs");
+        return;
+    }
+
+    const key = `GifFolders:gifs:${UserStore.getCurrentUser().id}`;
+    const storedGifs: Record<string, Gif> | undefined = await DataStore.get(key) ?? {};
+
+    if (Object.keys(storedGifs).length === 0) {
+        for (const [url, value] of Object.entries(allGifs)) {
+            storedGifs[url] = value;
+        }
+    }
+
+    await DataStore.set(key, storedGifs);
 }
 
 export default definePlugin({
@@ -345,6 +372,10 @@ export default definePlugin({
             IS_READY = false;
             return;
         }
+
+        await initializeGifs();
+
+
 
         // subscribing to this event because it's the only event that i know which runs after the gif menu closes
         // also happens when the user clears their gif search but it doesnt affect it

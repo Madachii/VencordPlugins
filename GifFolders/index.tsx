@@ -20,11 +20,11 @@ let LAST_VISITED_FOLDER: Folder | null = null;
 let IS_READY = true;
 
 export default definePlugin({
-    name: "Madachi",
-    description: "Makes it possible to organize gifs in folders, currently not working",
+    name: "GifFolders",
+    description: "Let's create and organize 'folders' for gifs! Start by running (/AddFolder, /DeleteFolder)",
     authors: [{
-        name: "You!",
-        id: 0n
+        name: "Madachi",
+        id: 670129843109672n
     }],
     commands: [
         {
@@ -33,7 +33,7 @@ export default definePlugin({
             description: "Add a new gif folder!",
             options: [
                 {
-                    name: "add_folder",
+                    name: "folder_name",
                     description: "Give the folder a name!",
                     type: ApplicationCommandOptionType.STRING
                 },
@@ -46,7 +46,7 @@ export default definePlugin({
             description: "Delete a existing folder!",
             options: [
                 {
-                    name: "delete_folder",
+                    name: "folder_name",
                     description: "Write the name of the folder you want to delete", // maybe could list the map?
                     type: ApplicationCommandOptionType.STRING
                 },
@@ -101,8 +101,8 @@ export default definePlugin({
         e.preventDefault();
         e.stopPropagation();
 
-        await openAddGifMenu(e, gif, getFolders(), LAST_VISITED_FOLDER); // could optimize by passing the all gif object in resolve
-        await showSelectedGifs(LAST_VISITED_FOLDER);
+        const gifs = await openAddGifMenu(e, gif, getFolders(), LAST_VISITED_FOLDER); // could optimize by passing the all gif object in resolve
+        await showSelectedGifs(LAST_VISITED_FOLDER, gifs);
     },
 
     async onGifSelect(e: React.UIEvent, props) {

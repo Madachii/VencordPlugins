@@ -40,7 +40,7 @@ export async function AddFolder(opts: CommandArgument[], cmd?: CommandContext) {
     }
 
     let { name, value } = opts[0];
-    if (name !== "add_folder") return;
+    if (name !== "folder_name") return;
 
     value = value.toLowerCase();
     if (FOLDERS.get(value)) {
@@ -72,7 +72,7 @@ export async function DeleteFolder(opts: CommandArgument[], cmd: CommandContext)
     }
 
     let { name, value } = opts[0];
-    if (name !== "delete_folder") return;
+    if (name !== "folder_name") return;
 
     value = value.toLowerCase();
     if (value === "default") {

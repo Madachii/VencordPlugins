@@ -85,6 +85,7 @@ export async function handleGifAdd(folder: Folder, gif: Gif, lastVisited: Folder
 
     allGifs[url] = { ...rest, order: highestOrder + 1 };
     await DataStore.set(key, allGifs);
+    return allGifs;
 }
 
 export async function handleGifDelete(gif: Gif, lastVisited: Folder | null = null) {
@@ -111,6 +112,8 @@ export async function handleGifDelete(gif: Gif, lastVisited: Folder | null = nul
 
     delete allGifs[gif.url];
     DataStore.set(key, allGifs); // continue modifying this
+    return allGifs;
+
 }
 
 // Need to use the RestApi because FrecencyAC.getCurrentValue()
@@ -137,6 +140,7 @@ async function getAllFavoritedGifs(): Promise<Record<string, Gif> | null> {
 }
 
 async function getAllFavoritedGifsFromDB(key: string): Promise<Record<string, Gif> | undefined> {
+    console.log("DOING A DB CALL................");
     const storedGifs: Record<string, Gif> | undefined = await DataStore.get(key);
     if (!storedGifs) {
         console.log("Failed to get the gifs from DB");
@@ -170,11 +174,11 @@ function generateProtoFromGifs(gifs: Record<string, Gif>) {
     return proto;
 }
 
-export async function showSelectedGifs(folder?: Folder | null) {
+export async function showSelectedGifs(folder?: Folder | null, gifs?: Record<string, Gif> | null) {
     const key = getKey();
     if (!key) return;
 
-    const allGifs: Record<string, Gif> | undefined = await getAllFavoritedGifsFromDB(key);
+    const allGifs = gifs || await getAllFavoritedGifsFromDB(key);
     if (!allGifs) {
         console.log("Failed to get all gifs!");
         return;

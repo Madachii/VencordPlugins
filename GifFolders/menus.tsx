@@ -5,72 +5,96 @@
  */
 
 import { ContextMenuApi, FluxDispatcher, Menu } from "@webpack/common";
+import { ReactNode } from "react";
 
 import { Folder } from "./folders";
 import { Gif, handleGifAdd, handleGifDelete, showSelectedGifs } from "./gifStore";
 
-export function openAddGifMenu(e: React.UIEvent, gif: Gif, folderMap: Map<string, Folder>, lastVisited: Folder | null = null): Promise<Folder | null> {
-    const folderList = Array.from(folderMap.values()); // not sure why, but using forEach makes the element disappear on hover
+class MenuBuilder {
+    private gif: Gif | undefined;
+    private lastVisited: Folder | undefined;
 
-    return new Promise<Folder | null>(resolve => {
-        ContextMenuApi.openContextMenu(e, () => (
-            <Menu.Menu
-                navId="madachi-gif-menu"
-                onClose={() => FluxDispatcher.dispatch({ type: "CONTEXT_MENU_CLOSE" })}
-                aria-label="Madachi Gif Menu"
-            >
-                {folderList.map(folder => (
-                    <Menu.MenuItem
-                        key={`folder-${folder.name}`}
-                        id={`favorite-folder-${folder.name}`}
-                        label={`Add to ${folder.name}`}
-                        color="brand"
-                        action={async () => {
-                            await handleGifAdd(folder, gif, lastVisited);
-                            resolve(folder);
-                        }}
-                    />
-                ))}
-                <Menu.MenuItem
-                    id={"delete-favorite"}
-                    label={"Delete"}
-                    color="danger"
-                    action={async () => {
-                        await handleGifDelete(gif, lastVisited);
-                        resolve(lastVisited);
-                    }}
-                />
+    private items: ReactNode[] = [];
+    private onClose: () => void = () => FluxDispatcher.dispatch({ type: "CONTEXT_MENU_CLOSE" });
+
+    constructor(gif?: Gif, lastVisited?: Folder | undefined) {
+        this.gif = gif;
+        this.lastVisited = lastVisited;
+    }
+
+    addFolder(folder: Folder, prefix: string, action: () => Promise<Record<string, Gif> | Folder | undefined>) {
+        this.items.push(
+            <Menu.MenuItem
+                key={`folder-${folder.name}`}
+                id={`favorite-folder-${folder.name}`}
+                label={`${prefix} ${folder.name}`}
+                color="brand"
+                action={async () => { await action(); }}
+            />
+        );
+
+        return this;
+    }
+
+    addDelete(action: () => Promise<Record<string, Gif> | undefined>) {
+        this.items.push(
+            <Menu.MenuItem
+                id={"delete-favorite"}
+                label={"Delete"}
+                color="danger"
+                action={async () => { await action(); }}
+            />
+        );
+        return this;
+    }
+
+    build() {
+        return (
+            <Menu.Menu navId="gif-folder-menu" onClose={this.onClose}>
+                {this.items}
             </Menu.Menu>
-        ));
+        );
+    }
+}
+
+export function openAddGifMenu(e: React.MouseEvent, gif: Gif, folderMap: Map<string, Folder>, lastVisited: Folder | undefined = undefined): Promise<Record<string, Gif> | undefined> {
+    const folders = Array.from(folderMap.values());
+
+    return new Promise(resolve => {
+        const builder = new MenuBuilder(gif, lastVisited);
+
+        folders.forEach(folder =>
+            builder.addFolder(folder, "Add to", async () => {
+                const result = await handleGifAdd(folder, gif, lastVisited);
+                resolve(result);
+                return result;
+            })
+        );
+
+        builder.addDelete(async () => {
+            const result = await handleGifDelete(gif, lastVisited);
+            resolve(result);
+            return result;
+        });
+
+        ContextMenuApi.openContextMenu(e, () => builder.build());
     });
 }
 
 export function openGifMenuAsync(e: React.UIEvent, folderMap: Map<string, Folder>): Promise<Folder> {
-    const folderList = Array.from(folderMap.values()); // not sure why, but using forEach makes the element disappear on hover
+    const folders = Array.from(folderMap.values());
 
-    return new Promise<Folder>(resolve => {
-        ContextMenuApi.openContextMenu(e, () => (
-            <Menu.Menu
-                navId="madachi-gif-menu"
-                aria-label="Madachi Gif Menu"
-                onClose={async () => {
-                    await FluxDispatcher.dispatch({ type: "CONTEXT_MENU_CLOSE" });
-                }}
-            >
-                {folderList.map(folder => (
-                    <Menu.MenuItem
-                        key={`open-folder-${folder.name}`}
-                        id={`open-folder-${folder.name}`}
-                        label={`Open ${folder.name}`}
-                        color="brand"
-                        action={async () => {
-                            await showSelectedGifs(folder);
-                            resolve(folder);
-                        }}
-                    />
-                ))}
-            </Menu.Menu>
-        )
-        );
+    return new Promise(resolve => {
+        const builder = new MenuBuilder();
+
+        folders.forEach(folder => {
+            builder.addFolder(folder, "Open", async () => {
+                await showSelectedGifs(folder);
+                resolve(folder);
+                return folder;
+            });
+        });
+
+        ContextMenuApi.openContextMenu(e, () => builder.build());
     });
 }

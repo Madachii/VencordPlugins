@@ -113,7 +113,6 @@ export default definePlugin({
             e.preventDefault();
             e.stopPropagation();
             LAST_VISITED_FOLDER = await openGifMenuAsync(e, getFolders());
-            console.log("LAST VISITED FOLDER AFTER OPEN: ", LAST_VISITED_FOLDER);
         }
 
         props.onClick?.(props.item, props.index); // original function
@@ -122,5 +121,4 @@ export default definePlugin({
 );
 
 
-// BUG: changing the folders from one to another while inside of the gif picker seems to break the order a bit
 // add insertion checks

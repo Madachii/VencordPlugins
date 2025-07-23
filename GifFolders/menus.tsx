@@ -57,7 +57,7 @@ class MenuBuilder {
     }
 }
 
-export function openAddGifMenu(e: React.MouseEvent, gif: Gif, folderMap: Map<string, Folder>, lastVisited: Folder | undefined = undefined): Promise<Record<string, Gif> | undefined> {
+export function openAddGifMenu(e: React.UIEvent, gif: Gif, folderMap: Map<string, Folder>, lastVisited: Folder | undefined = undefined): Promise<Record<string, Gif> | undefined> {
     const folders = Array.from(folderMap.values());
 
     return new Promise(resolve => {

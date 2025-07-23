@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { sendBotMessage } from "@api/Commands";
+import { ApplicationCommandOptionType, sendBotMessage } from "@api/Commands";
 import { DataStore } from "@api/index";
 import { Logger } from "@utils/Logger";
 import { CommandArgument, CommandContext } from "@vencord/discord-types";
@@ -99,7 +99,12 @@ export async function initializeFolder(): Promise<boolean> {
     const storedFolders: Record<string, Folder> = await DataStore.get(key) ?? {};
 
     if (Object.keys(storedFolders).length === 0 || !storedFolders.default) {
-        await AddFolder([{ name: "add_folder", value: "default" }], null);
+        await AddFolder([{
+            name: "add_folder", value: "default",
+            type: ApplicationCommandOptionType.STRING,
+            focused: undefined,
+            options: []
+        }], undefined); // I don't need "focused" and "options" but i have no clue how to make typescript not complain about the missing fields in the object
         return FOLDERS.size > 0;
     }
 

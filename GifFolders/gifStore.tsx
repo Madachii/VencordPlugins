@@ -57,6 +57,15 @@ function getKey() {
     return `GifFolders:gif:${id}`;
 }
 
+async function getAllGifs(key) {
+    const allGifs: Record<string, Gif> | undefined = await getAllFavoritedGifsFromDB(key);
+    if (!allGifs) {
+        new Logger("GifFolders").error("Failed to grab all gifs");
+        return undefined;
+    }
+    return allGifs;
+}
+
 // change this to get the last free open index instead
 // would it work to Set the values so the editing person can change folders easily?
 export async function handleGifAdd(folder: Folder, gif: Gif, lastVisited: Folder | null = null) { // using incrementing index for now, change later for unique ids or something
@@ -65,11 +74,8 @@ export async function handleGifAdd(folder: Folder, gif: Gif, lastVisited: Folder
     const key = getKey();
     if (!key) return;
 
-    const allGifs: Record<string, Gif> | undefined = await getAllFavoritedGifsFromDB(key);
-    if (!allGifs) {
-        new Logger("GifFolders").error("Failed to grab all gifs!");
-        return;
-    }
+    const allGifs = getAllGifs(key);
+    if (!allGifs) return;
 
     const { url, ...rest } = gif;
     if (!url) {
@@ -99,11 +105,8 @@ export async function handleGifDelete(gif: Gif, lastVisited: Folder | null = nul
     const key = getKey();
     if (!key) return;
 
-    const allGifs: Record<string, Gif> | undefined = await getAllFavoritedGifsFromDB(key);
-    if (!allGifs) {
-        new Logger("GifFolders").error("Failed to grab all gifs!");
-        return;
-    }
+    const allGifs = getAllGifs(key);
+    if (!allGifs) return;
 
     if (!(gif.url in allGifs)) {
         new Logger("GifFolders").error("Failed to find the gif, won't delete!");
@@ -140,7 +143,6 @@ async function getAllFavoritedGifs(): Promise<Record<string, Gif> | null> {
 }
 
 async function getAllFavoritedGifsFromDB(key: string): Promise<Record<string, Gif> | undefined> {
-    console.log("DOING A DB CALL................");
     const storedGifs: Record<string, Gif> | undefined = await DataStore.get(key);
     if (!storedGifs) {
         console.log("Failed to get the gifs from DB");
@@ -178,18 +180,15 @@ export async function showSelectedGifs(folder?: Folder | null, gifs?: Record<str
     const key = getKey();
     if (!key) return;
 
-    const allGifs = gifs || await getAllFavoritedGifsFromDB(key);
-    if (!allGifs) {
-        console.log("Failed to get all gifs!");
-        return;
-    }
+    const allGifs = await getAllGifs(key);
+    if (!allGifs) return;
 
     let filteredGifs;
     if (!folder)
         filteredGifs = allGifs;
     else {
         filteredGifs = Object.fromEntries(
-            Object.entries(allGifs as Record<string, Gif>)
+            Object.entries(allGifs)
                 .filter(([, { order }]) => order >= folder.start && order < folder.end)
                 .map(([url, data]) => [url, { ...data }])
         );
@@ -214,10 +213,10 @@ export async function initializeGifs() {
     const key = getKey();
     if (!key) return false;
 
-    const allGifs: Record<string, Gif> | null = await getAllFavoritedGifs();
-    if (!allGifs || Object.keys(allGifs).length === 0) {
-        console.log("Failed to get all gifs or you don't have any gifs");
-        return true;
+    const allGifs = getAllFavoritedGifs();
+    if (!allGifs) {
+        new Logger("GifFolders").error("Failed to grab all gifs");
+        return false;
     }
 
     const storedGifs: Record<string, Gif> | undefined = await DataStore.get(key) ?? {};

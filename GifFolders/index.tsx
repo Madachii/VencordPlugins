@@ -14,9 +14,8 @@ import { openAddGifMenu, openGifMenuAsync } from "./menus";
 import { grabGifProp } from "./utils";
 
 
-
 let GIF_PICKER_CALLBACK;
-let LAST_VISITED_FOLDER: Folder | null = null;
+let LAST_VISITED_FOLDER: Folder | undefined = undefined;
 let IS_READY = true;
 
 export default definePlugin({

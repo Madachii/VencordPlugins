@@ -22,17 +22,16 @@ const FOLDERS: Map<string, Folder> = new Map<string, Folder>();
 const DEFAULT_FOLDER_STEP = 10 ** 5;
 
 
+export const getFolders = (): Map<string, Folder> => FOLDERS;
+
 function getKey() {
     const id = UserStore?.getCurrentUser()?.id;
     if (!id) return undefined;
     return `GifFolders:folders:${id}`;
 }
 
-
-export const getFolders = (): Map<string, Folder> => FOLDERS;
-
 export async function AddFolder(opts: CommandArgument[], cmd?: CommandContext) {
-    if (!opts || opts.length < 1) return; // left off here
+    if (!opts || opts.length < 1) return;
 
     const key = getKey();
     if (!key) {
@@ -101,7 +100,6 @@ export async function initializeFolder(): Promise<boolean> {
 
     if (Object.keys(storedFolders).length === 0 || !storedFolders.default) {
         await AddFolder([{ name: "add_folder", value: "default" }], null);
-        console.log("Added folder and exited!");
         return FOLDERS.size > 0;
     }
 

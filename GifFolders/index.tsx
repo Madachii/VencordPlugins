@@ -5,7 +5,6 @@
  */
 
 import { ApplicationCommandInputType, ApplicationCommandOptionType } from "@api/Commands";
-import { DataStore } from "@api/index";
 import definePlugin from "@utils/types";
 import { FluxDispatcher, React } from "@webpack/common";
 
@@ -57,8 +56,8 @@ export default definePlugin({
     ],
 
     async start() {
-        IS_READY = await initializeFolder();
-        IS_READY = await initializeGifs();
+        IS_READY = await initializeFolder() && await initializeGifs();
+        if (!IS_READY) return;
 
         // subscribing to this event because it's the only event that i know which runs after the gif menu closes
         // also happens when the user clears their gif search but it doesnt affect it
@@ -66,7 +65,6 @@ export default definePlugin({
             if (!query) showSelectedGifs(null);
         };
         FluxDispatcher.subscribe("GIF_PICKER_QUERY", ({ query }) => { if (!query) showSelectedGifs(null); });
-        console.log("DataStore :", DataStore);
     },
 
     stop() {
@@ -103,9 +101,8 @@ export default definePlugin({
         e.preventDefault();
         e.stopPropagation();
 
-        const visited = await openAddGifMenu(e, gif, getFolders(), LAST_VISITED_FOLDER);
+        await openAddGifMenu(e, gif, getFolders(), LAST_VISITED_FOLDER); // could optimize by passing the all gif object in resolve
         await showSelectedGifs(LAST_VISITED_FOLDER);
-        LAST_VISITED_FOLDER = visited;
     },
 
     async onGifSelect(e: React.UIEvent, props) {
@@ -116,6 +113,7 @@ export default definePlugin({
             e.preventDefault();
             e.stopPropagation();
             LAST_VISITED_FOLDER = await openGifMenuAsync(e, getFolders());
+            console.log("LAST VISITED FOLDER AFTER OPEN: ", LAST_VISITED_FOLDER);
         }
 
         props.onClick?.(props.item, props.index); // original function

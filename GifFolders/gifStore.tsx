@@ -29,30 +29,41 @@ export interface Gif {
 
 
 function allLoaded(): boolean {
-    if (!FrecencyAC || !FavoriteAC || !BINARY_READ_OPTIONS)
+    try {
+        FrecencyAC.ProtoClass;
+    }
+    catch (e) {
+        new Logger("GifFolders").error("Frecency is not initialized");
         return false;
+    }
+
+    try {
+        BINARY_READ_OPTIONS.readerFactory;
+    }
+    catch (e) {
+        new Logger("GifFolders").error("BINARY_READ_OPTIONS is not initialized");
+        return false;
+    }
+
     return true;
 }
 
 function getKey() {
     const id = UserStore?.getCurrentUser()?.id;
-    if (!id) return undefined;
+    if (!id) {
+        new Logger("GifFolders").error("Failed to key in gifStore");
+        return undefined;
+    }
     return `GifFolders:gif:${id}`;
 }
 
 // change this to get the last free open index instead
 // would it work to Set the values so the editing person can change folders easily?
 export async function handleGifAdd(folder: Folder, gif: Gif, lastVisited: Folder | null = null) { // using incrementing index for now, change later for unique ids or something
-    if (!allLoaded()) {
-        new Logger("GifFolders").error("Frecency is not initialized");
-        return;
-    }
+    if (!allLoaded()) return;
 
     const key = getKey();
-    if (!key) {
-        new Logger("GifFolders").error("Failed to get id while deleting folder");
-        return;
-    }
+    if (!key) return;
 
     const allGifs: Record<string, Gif> | undefined = await getAllFavoritedGifsFromDB(key);
     if (!allGifs) {
@@ -71,6 +82,7 @@ export async function handleGifAdd(folder: Folder, gif: Gif, lastVisited: Folder
         .reduce((highest, gif) => highest > gif.order ? highest : gif.order, folder.start - 1);
 
     if (highestOrder + 1 >= folder.end) return; //  should be impossible to reach this
+
     allGifs[url] = { ...rest, order: highestOrder + 1 };
     await DataStore.set(key, allGifs);
 }
@@ -81,16 +93,10 @@ export async function handleGifDelete(gif: Gif, lastVisited: Folder | null = nul
         return;
     }
 
-    if (!allLoaded()) {
-        new Logger("GifFolders").error("Frecency is not initialized");
-        return;
-    }
+    if (!allLoaded()) return;
 
     const key = getKey();
-    if (!key) {
-        new Logger("GifFolders").error("Failed to get id while deleting folder");
-        return;
-    }
+    if (!key) return;
 
     const allGifs: Record<string, Gif> | undefined = await getAllFavoritedGifsFromDB(key);
     if (!allGifs) {
@@ -110,10 +116,7 @@ export async function handleGifDelete(gif: Gif, lastVisited: Folder | null = nul
 // Need to use the RestApi because FrecencyAC.getCurrentValue()
 // return the local array of gifs (affected by FluxDispatcher)
 async function getAllFavoritedGifs(): Promise<Record<string, Gif> | null> {
-    if (!allLoaded()) {
-        new Logger("GifFolders").error("Frecency is not initialized");
-        return null;
-    }
+    if (!allLoaded()) null;
     const { ok, status, body } = await RestAPI.get({
         url: "/users/@me/settings-proto/2"
     });
@@ -144,10 +147,7 @@ async function getAllFavoritedGifsFromDB(key: string): Promise<Record<string, Gi
 }
 
 function generateProtoFromGifs(gifs: Record<string, Gif>) {
-    if (!allLoaded()) {
-        new Logger("GifFolders").error("Frecency is not initialized");
-        return;
-    }
+    if (!allLoaded()) return;
 
     const proto = FrecencyAC.ProtoClass.create();
     if (!gifs || Object.keys(gifs).length === 0) {
@@ -172,10 +172,7 @@ function generateProtoFromGifs(gifs: Record<string, Gif>) {
 
 export async function showSelectedGifs(folder?: Folder | null) {
     const key = getKey();
-    if (!key) {
-        new Logger("GifFolders").error("Failed to get id while deleting folder");
-        return;
-    }
+    if (!key) return;
 
     const allGifs: Record<string, Gif> | undefined = await getAllFavoritedGifsFromDB(key);
     if (!allGifs) {
@@ -208,11 +205,10 @@ export async function showSelectedGifs(folder?: Folder | null) {
 // So we are not going to modify the users gif, instead we are going to add everything they have
 // and then fully use the Vencord db module
 export async function initializeGifs() {
+    if (!allLoaded()) return false;
+
     const key = getKey();
-    if (!key) {
-        new Logger("GifFolders").error("Failed to get id while deleting folder");
-        return false;
-    }
+    if (!key) return false;
 
     const allGifs: Record<string, Gif> | null = await getAllFavoritedGifs();
     if (!allGifs || Object.keys(allGifs).length === 0) {

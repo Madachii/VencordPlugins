@@ -74,7 +74,7 @@ export async function handleGifAdd(folder: Folder, gif: Gif, lastVisited: Folder
     const key = getKey();
     if (!key) return;
 
-    const allGifs = getAllGifs(key);
+    const allGifs = await getAllGifs(key);
     if (!allGifs) return;
 
     const { url, ...rest } = gif;
@@ -105,7 +105,7 @@ export async function handleGifDelete(gif: Gif, lastVisited: Folder | null = nul
     const key = getKey();
     if (!key) return;
 
-    const allGifs = getAllGifs(key);
+    const allGifs = await getAllGifs(key);
     if (!allGifs) return;
 
     if (!(gif.url in allGifs)) {

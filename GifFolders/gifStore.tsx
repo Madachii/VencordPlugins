@@ -16,6 +16,9 @@ const FrecencyAC = proxyLazyWebpack(() => UserSettingsActionCreators.FrecencyUse
 const FavoriteAC = proxyLazyWebpack(() => searchProtoClassField("favoriteGifs", FrecencyAC.ProtoClass));
 const BINARY_READ_OPTIONS = findByPropsLazy("readerFactory");
 
+let LAST_SAVE_TIME = 0;
+const GIF_TO_BE_UPDATED: { save: Record<string, Gif>; delete: Set<string>; } = { save: {}, delete: new Set() };
+let ALL_GIFS: Record<string, Gif>;
 
 export interface Gif {
     url?: string,
@@ -27,7 +30,60 @@ export interface Gif {
     order: number,
 }
 
+async function updateGifs(save?: Record<string, Gif>, del?: string) {
+    const timePassed = Date.now() - LAST_SAVE_TIME;
 
+    console.log("TIME PASSED: ", timePassed);
+    if (timePassed >= 10000) {
+        const key = getKey();
+        if (!key) return;
+
+        const allGifs = await DataStore.get(key);
+        if (!allGifs) return;
+
+        await FrecencyAC.updateAsync(
+            "favoriteGifs",
+            data => {
+                data.gifs = { ...allGifs };
+            },
+            0
+        );
+        console.log("Updated gifs!");
+
+        LAST_SAVE_TIME = Date.now();
+    }
+    else {
+        const waitTime = 10000 - timePassed + 100; // im not sure if the extra time is needed, but i dont want to run into timing issues
+        setTimeout(() => updateGifs(), waitTime);
+    }
+}
+
+async function queueGifUpdate(key?: string, allGifs?: Record<string, Gif>) {
+    if (!allGifs) {
+        console.log("Didn't get the full gif list");
+        return;
+    }
+
+    if (Object.keys(GIF_TO_BE_UPDATED.save).length === 0 && GIF_TO_BE_UPDATED.delete.size === 0) {
+        console.log("No more gifs to change!");
+        return;
+    }
+
+    for (const [url, gif] of Object.entries(GIF_TO_BE_UPDATED.save ?? {})) {
+        allGifs[url] = gif;
+        GIF_TO_BE_UPDATED.save[url] = gif;
+    }
+
+    for (const url of GIF_TO_BE_UPDATED.delete ?? new Set()) {
+        delete allGifs[url];
+        GIF_TO_BE_UPDATED.delete.add(url);
+    }
+
+    console.log("queue running!, updating with the follwing: ", GIF_TO_BE_UPDATED);
+    await DataStore.set(key, allGifs);
+    await updateGifs(allGifs);
+    return allGifs;
+}
 function allLoaded(): boolean {
     try {
         FrecencyAC.ProtoClass;
@@ -57,6 +113,15 @@ function getKey() {
     return `GifFolders:gif:${id}`;
 }
 
+
+
+export async function getGif(url: string | undefined) {
+    const key = getKey();
+    if (!key || !url) return undefined;
+
+    const gifs = await DataStore.get(key);
+    return gifs[url];
+}
 async function getAllGifs(key) {
     const allGifs: Record<string, Gif> | undefined = await getAllFavoritedGifsFromDB(key);
     if (!allGifs) {
@@ -89,9 +154,8 @@ export async function handleGifAdd(folder: Folder, gif: Gif, lastVisited: Folder
 
     if (highestOrder + 1 >= folder.end) return; //  should be impossible to reach this
 
-    allGifs[url] = { ...rest, order: highestOrder + 1 };
-    await DataStore.set(key, allGifs);
-    return allGifs;
+    const newGif = { ...rest, order: highestOrder + 1 };
+    return updateGifs({ save: { [url]: newGif } });
 }
 
 export async function handleGifDelete(gif: Gif, lastVisited: Folder | null = null) {
@@ -113,10 +177,7 @@ export async function handleGifDelete(gif: Gif, lastVisited: Folder | null = nul
         return;
     }
 
-    delete allGifs[gif.url];
-    DataStore.set(key, allGifs); // continue modifying this
-    return allGifs;
-
+    return updateGifs();
 }
 
 // Need to use the RestApi because FrecencyAC.getCurrentValue()
@@ -213,17 +274,15 @@ export async function initializeGifs() {
     const key = getKey();
     if (!key) return false;
 
-    const allGifs = getAllFavoritedGifs();
+    const allGifs = await getAllFavoritedGifs();
     if (!allGifs) {
         new Logger("GifFolders").error("Failed to grab all gifs");
         return false;
     }
 
     const storedGifs: Record<string, Gif> | undefined = await DataStore.get(key) ?? {};
-    if (Object.keys(storedGifs).length === 0) {
-        for (const [url, value] of Object.entries(allGifs)) {
-            storedGifs[url] = value;
-        }
+    for (const [url, value] of Object.entries(allGifs)) {
+        storedGifs[url] = value;
     }
 
     await DataStore.set(key, storedGifs);

@@ -22,12 +22,12 @@ class MenuBuilder {
         this.lastVisited = lastVisited;
     }
 
-    addFolder(folder: Folder, prefix: string, action: () => Promise<Record<string, Gif> | Folder | undefined>) {
+    addFolder(name: string, prefix: string, action: () => Promise<Record<string, Gif> | Folder | undefined>) {
         this.items.push(
             <Menu.MenuItem
-                key={`folder-${folder.name}`}
-                id={`favorite-folder-${folder.name}`}
-                label={`${prefix} ${folder.name}`}
+                key={`folder-${name}`}
+                id={`favorite-folder-${name}`}
+                label={`${prefix} ${name}`}
                 color="brand"
                 action={async () => { await action(); }}
             />
@@ -57,14 +57,14 @@ class MenuBuilder {
     }
 }
 
-export function openAddGifMenu(e: React.UIEvent, gif: Gif, folderMap: Map<string, Folder>, lastVisited: Folder | undefined = undefined): Promise<Record<string, Gif> | undefined> {
+export async function openAddGifMenu(e: React.UIEvent, gif: Gif, folderMap: Map<string, Folder>, lastVisited: Folder | undefined = undefined): Promise<Record<string, Gif> | undefined> {
     const folders = Array.from(folderMap.values());
 
     return new Promise(resolve => {
         const builder = new MenuBuilder(gif, lastVisited);
 
         folders.forEach(folder =>
-            builder.addFolder(folder, "Add to", async () => {
+            builder.addFolder(folder.name, "Add to", async () => {
                 const result = await handleGifAdd(folder, gif, lastVisited);
                 resolve(result);
                 return result;
@@ -88,7 +88,7 @@ export function openGifMenuAsync(e: React.UIEvent, folderMap: Map<string, Folder
         const builder = new MenuBuilder();
 
         folders.forEach(folder => {
-            builder.addFolder(folder, "Open", async () => {
+            builder.addFolder(folder.name, "Open", async () => {
                 await showSelectedGifs(folder);
                 resolve(folder);
                 return folder;

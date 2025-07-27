@@ -8,7 +8,7 @@ import { ContextMenuApi, FluxDispatcher, Menu } from "@webpack/common";
 import { ReactNode } from "react";
 
 import { Folder } from "./folders";
-import { Gif, handleGifAdd, handleGifDelete, showSelectedGifs } from "./gifStore";
+import { Gif, handleGifAdd, handleGifDelete, showSelectedGifs, updateGifs } from "./gifStore";
 
 class MenuBuilder {
     private gif: Gif | undefined;
@@ -22,29 +22,17 @@ class MenuBuilder {
         this.lastVisited = lastVisited;
     }
 
-    addFolder(folder: Folder, prefix: string, action: () => Promise<Record<string, Gif> | Folder | undefined>) {
+    addFolder(name: string, label: string, action: () => Promise<Record<string, Gif> | Folder | undefined>, color: string = "brand") {
         this.items.push(
             <Menu.MenuItem
-                key={`folder-${folder.name}`}
-                id={`favorite-folder-${folder.name}`}
-                label={`${prefix} ${folder.name}`}
-                color="brand"
+                key={`folder-${name}`}
+                id={`favorite-folder-${name}`}
+                label={`${label}`}
+                color={color}
                 action={async () => { await action(); }}
             />
         );
 
-        return this;
-    }
-
-    addDelete(action: () => Promise<Record<string, Gif> | undefined>) {
-        this.items.push(
-            <Menu.MenuItem
-                id={"delete-favorite"}
-                label={"Delete"}
-                color="danger"
-                action={async () => { await action(); }}
-            />
-        );
         return this;
     }
 
@@ -64,37 +52,42 @@ export function openAddGifMenu(e: React.UIEvent, gif: Gif, folderMap: Map<string
         const builder = new MenuBuilder(gif, lastVisited);
 
         folders.forEach(folder =>
-            builder.addFolder(folder, "Add to", async () => {
+            builder.addFolder(folder.name, `Save to ${folder.name}`, async () => {
                 const result = await handleGifAdd(folder, gif, lastVisited);
                 resolve(result);
                 return result;
             })
         );
 
-        builder.addDelete(async () => {
+        builder.addFolder("delete", "Delete", async () => {
             const result = await handleGifDelete(gif, lastVisited);
             resolve(result);
             return result;
-        });
+        }, "danger");
 
         ContextMenuApi.openContextMenu(e, () => builder.build());
     });
 }
 
-export function openGifMenuAsync(e: React.UIEvent, folderMap: Map<string, Folder>): Promise<Folder> {
+export function openGifMenuAsync(e: React.UIEvent, folderMap: Map<string, Folder>): Promise<Folder | undefined> {
     const folders = Array.from(folderMap.values());
 
     return new Promise(resolve => {
         const builder = new MenuBuilder();
 
         folders.forEach(folder => {
-            builder.addFolder(folder, "Open", async () => {
+            builder.addFolder(folder.name, `Open ${folder.name}`, async () => {
                 await showSelectedGifs(folder);
                 resolve(folder);
                 return folder;
             });
         });
 
+        builder.addFolder("save", "Save to Discord", async () => {
+            const result = await updateGifs();
+            resolve(undefined);
+            return undefined;
+        }, "danger");
         ContextMenuApi.openContextMenu(e, () => builder.build());
     });
 }

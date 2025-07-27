@@ -66,6 +66,21 @@ async function getAllGifs(key) {
     return allGifs;
 }
 
+export async function updateGifs() {
+    const key = getKey();
+    if (!key) return;
+
+    const allGifs = await getAllGifs(key);
+    if (!allGifs) return;
+
+    await FrecencyAC.updateAsync(
+        "favoriteGifs",
+        data => {
+            data.gifs = { ...allGifs };
+        },
+        0
+    );
+}
 // change this to get the last free open index instead
 // would it work to Set the values so the editing person can change folders easily?
 export async function handleGifAdd(folder: Folder, gif: Gif, lastVisited: Folder | null = null) { // using incrementing index for now, change later for unique ids or something

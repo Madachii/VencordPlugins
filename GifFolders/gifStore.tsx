@@ -195,7 +195,7 @@ export async function showSelectedGifs(folder?: Folder | null, gifs?: Record<str
     const key = getKey();
     if (!key) return;
 
-    const allGifs = await getAllGifs(key);
+    const allGifs = gifs || await getAllGifs(key);
     if (!allGifs) return;
 
     let filteredGifs;

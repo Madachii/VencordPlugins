@@ -58,8 +58,8 @@ export function getKey() {
     return `GifFolders:gif:${id}`;
 }
 
-export async function getAllGifs(key) {
-    const allGifs: Record<string, Gif> | undefined = await getAllFavoritedGifsFromDB(key);
+export async function getAllGifs(key?: string | undefined) {
+    const allGifs: Record<string, Gif> | undefined = key ? await getAllFavoritedGifsFromDB(key) : await getAllFavoritedGifs();
     if (!allGifs) {
         new Logger("GifFolders").error("Failed to grab all gifs");
         return undefined;
@@ -87,11 +87,11 @@ export function getFolderPreviewGifs() {
     return folderGifPreviews;
 }
 
-export async function setFolderPreviewGifs() {
-    const key = getKey();
+export async function setFolderPreviewGifs(keyName?: string, gifs?: Record<string, Gif>) {
+    const key = keyName || getKey();
     if (!key) return;
 
-    const allGifs = await getAllGifs(key);
+    const allGifs = gifs || await getAllGifs(key);
     if (!allGifs) return;
 
     const seen = new Map();
@@ -129,8 +129,12 @@ export async function handleGifAdd(folder: Folder, gif: Gif, lastVisited: Folder
 
     if (highestOrder + 1 >= folder.end) return; //  should be impossible to reach this
 
+
     allGifs[url] = { ...rest, order: highestOrder + 1 };
     await DataStore.set(key, allGifs);
+
+    folderGifPreviews.set(folder.idx, { src: rest.src, format: rest.format });
+
     return allGifs;
 }
 
@@ -161,14 +165,14 @@ export async function handleGifDelete(gif: Gif, lastVisited: Folder | null = nul
 
 // Need to use the RestApi because FrecencyAC.getCurrentValue()
 // return the local array of gifs (affected by FluxDispatcher)
-async function getAllFavoritedGifs(): Promise<Record<string, Gif> | null> {
-    if (!allLoaded()) null;
+export async function getAllFavoritedGifs(): Promise<Record<string, Gif> | undefined> {
+    if (!allLoaded()) undefined;
     const { ok, status, body } = await RestAPI.get({
         url: "/users/@me/settings-proto/2"
     });
 
     if (!ok || status !== 200 || !body?.settings)
-        return null;
+        return undefined;
 
     const bytes = Uint8Array.from(atob(body.settings), c => c.charCodeAt(0));
     const end = FrecencyAC.ProtoClass.fromBinary(
@@ -177,7 +181,7 @@ async function getAllFavoritedGifs(): Promise<Record<string, Gif> | null> {
     );
 
     if (!end.favoriteGifs || !end.favoriteGifs.gifs)
-        return null;
+        return undefined;
 
     return end.favoriteGifs.gifs;
 }
@@ -253,7 +257,7 @@ export async function initializeGifs() {
     const key = getKey();
     if (!key) return false;
 
-    const allGifs = getAllFavoritedGifs();
+    const allGifs = await getAllFavoritedGifs();
     if (!allGifs) {
         new Logger("GifFolders").error("Failed to grab all gifs");
         return false;
@@ -267,7 +271,6 @@ export async function initializeGifs() {
     }
 
     await DataStore.set(key, storedGifs);
-
-    await setFolderPreviewGifs();
+    await setFolderPreviewGifs(key, storedGifs);
     return true;
 }

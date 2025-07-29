@@ -5,11 +5,12 @@
  */
 
 import { ApplicationCommandInputType, ApplicationCommandOptionType } from "@api/Commands";
+import { DataStore } from "@api/index";
 import definePlugin from "@utils/types";
 import { FluxDispatcher, React } from "@webpack/common";
 
-import { AddFolder, DeleteFolder, Folder, getFolders, initializeFolder } from "./folders";
-import { getFolderPreviewGifs, initializeGifs, showSelectedGifs } from "./gifStore";
+import { AddFolder, DeleteFolder, Folder, getFolders, initializeFolder, RenameFolder } from "./folders";
+import { getAllGifs, getFolderPreviewGifs, initializeGifs, showSelectedGifs } from "./gifStore";
 import { openAddGifMenu } from "./menus";
 import { grabGifProp } from "./utils";
 
@@ -41,6 +42,24 @@ export default definePlugin({
         },
         {
             inputType: ApplicationCommandInputType.BUILT_IN,
+            name: "RenameFolder",
+            description: "Rename a already existing folder!",
+            options: [
+                {
+                    name: "old_name",
+                    description: "Name of the already existing folder",
+                    type: ApplicationCommandOptionType.STRING
+                },
+                {
+                    name: "new_name",
+                    description: "The new name to change it into!",
+                    type: ApplicationCommandOptionType.STRING
+                }
+            ],
+            execute: async (opts, cmd) => RenameFolder(opts, cmd),
+        },
+        {
+            inputType: ApplicationCommandInputType.BUILT_IN,
             name: "DeleteFolder",
             description: "Delete a existing folder!",
             options: [
@@ -55,6 +74,7 @@ export default definePlugin({
     ],
 
     async start() {
+        console.log(DataStore);
         IS_READY = await initializeFolder() && await initializeGifs();
         if (!IS_READY) return;
 
@@ -122,8 +142,9 @@ export default definePlugin({
         const categories: Array<{ name: string, src: string, type: string, format: number; }> = [];
 
         const folders = getFolders();
-        const folderPreviews = getFolderPreviewGifs();
+        if (folders.size === 0) return trendingArray;
 
+        const folderPreviews = getFolderPreviewGifs();
         for (const { idx, name } of folders.values()) {
             const gif = folderPreviews.get(idx);
             categories.push({ name: name, src: gif?.src ?? "", type: "Favorites", format: gif?.format ?? 1 });
@@ -134,7 +155,10 @@ export default definePlugin({
 
     async handleSelectItem(type: string, name: string) {
         const folders = getFolders();
-        await showSelectedGifs(folders.get(name));
+        if (type === "Favorites" && name === "Favorites")
+            await showSelectedGifs(undefined, await getAllGifs());
+        else
+            await showSelectedGifs(folders.get(name));
     }
 }
 );

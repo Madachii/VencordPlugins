@@ -9,13 +9,14 @@ import { Logger } from "@utils/Logger";
 import { findByPropsLazy, proxyLazyWebpack } from "@webpack";
 import { FluxDispatcher, RestAPI, UserSettingsActionCreators, UserStore } from "@webpack/common";
 
-import { Folder } from "./folders";
+import { DEFAULT_FOLDER_STEP, Folder } from "./folders";
 import { searchProtoClassField } from "./utils";
 
 const FrecencyAC = proxyLazyWebpack(() => UserSettingsActionCreators.FrecencyUserSettingsActionCreators);
 const FavoriteAC = proxyLazyWebpack(() => searchProtoClassField("favoriteGifs", FrecencyAC.ProtoClass));
 const BINARY_READ_OPTIONS = findByPropsLazy("readerFactory");
 
+const folderGifPreviews = new Map<number, { src: string, format: number; }>();
 
 export interface Gif {
     url?: string,
@@ -48,7 +49,7 @@ function allLoaded(): boolean {
     return true;
 }
 
-function getKey() {
+export function getKey() {
     const id = UserStore?.getCurrentUser()?.id;
     if (!id) {
         new Logger("GifFolders").error("Failed to key in gifStore");
@@ -57,7 +58,7 @@ function getKey() {
     return `GifFolders:gif:${id}`;
 }
 
-async function getAllGifs(key) {
+export async function getAllGifs(key) {
     const allGifs: Record<string, Gif> | undefined = await getAllFavoritedGifsFromDB(key);
     if (!allGifs) {
         new Logger("GifFolders").error("Failed to grab all gifs");
@@ -81,6 +82,30 @@ export async function updateGifs() {
         0
     );
 }
+
+export function getFolderPreviewGifs() {
+    return folderGifPreviews;
+}
+
+export async function setFolderPreviewGifs() {
+    const key = getKey();
+    if (!key) return;
+
+    const allGifs = await getAllGifs(key);
+    if (!allGifs) return;
+
+    const seen = new Map();
+    for (const { format, src, order } of Object.values(allGifs)) {
+        const folderIdx = Math.floor(order / DEFAULT_FOLDER_STEP);
+        if (seen.has(folderIdx)) return;
+
+        folderGifPreviews.set(folderIdx, { format: format, src: src });
+    }
+
+    return folderGifPreviews;
+}
+
+
 // change this to get the last free open index instead
 // would it work to Set the values so the editing person can change folders easily?
 export async function handleGifAdd(folder: Folder, gif: Gif, lastVisited: Folder | null = null) { // using incrementing index for now, change later for unique ids or something
@@ -191,7 +216,7 @@ function generateProtoFromGifs(gifs: Record<string, Gif>) {
     return proto;
 }
 
-export async function showSelectedGifs(folder?: Folder | null, gifs?: Record<string, Gif> | null) {
+export async function showSelectedGifs(folder?: Folder | undefined, gifs?: Record<string, Gif> | null) {
     const key = getKey();
     if (!key) return;
 
@@ -242,5 +267,7 @@ export async function initializeGifs() {
     }
 
     await DataStore.set(key, storedGifs);
+
+    await setFolderPreviewGifs();
     return true;
 }

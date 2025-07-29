@@ -8,7 +8,7 @@ import { ContextMenuApi, FluxDispatcher, Menu } from "@webpack/common";
 import { ReactNode } from "react";
 
 import { Folder } from "./folders";
-import { Gif, handleGifAdd, handleGifDelete, showSelectedGifs, updateGifs } from "./gifStore";
+import { Gif, handleGifAdd, handleGifDelete } from "./gifStore";
 
 class MenuBuilder {
     private gif: Gif | undefined;
@@ -65,29 +65,6 @@ export function openAddGifMenu(e: React.UIEvent, gif: Gif, folderMap: Map<string
             return result;
         }, "danger");
 
-        ContextMenuApi.openContextMenu(e, () => builder.build());
-    });
-}
-
-export function openGifMenuAsync(e: React.UIEvent, folderMap: Map<string, Folder>): Promise<Folder | undefined> {
-    const folders = Array.from(folderMap.values());
-
-    return new Promise(resolve => {
-        const builder = new MenuBuilder();
-
-        folders.forEach(folder => {
-            builder.addFolder(folder.name, `Open ${folder.name}`, async () => {
-                await showSelectedGifs(folder);
-                resolve(folder);
-                return folder;
-            });
-        });
-
-        builder.addFolder("save", "Save to Discord", async () => {
-            const result = await updateGifs();
-            resolve(undefined);
-            return undefined;
-        }, "danger");
         ContextMenuApi.openContextMenu(e, () => builder.build());
     });
 }

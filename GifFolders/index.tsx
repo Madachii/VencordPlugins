@@ -9,13 +9,13 @@ import definePlugin from "@utils/types";
 import { FluxDispatcher, React } from "@webpack/common";
 
 import { AddFolder, DeleteFolder, Folder, getFolders, initializeFolder } from "./folders";
-import { initializeGifs, showSelectedGifs } from "./gifStore";
-import { openAddGifMenu, openGifMenuAsync } from "./menus";
+import { getFolderPreviewGifs, initializeGifs, showSelectedGifs } from "./gifStore";
+import { openAddGifMenu } from "./menus";
 import { grabGifProp } from "./utils";
 
 
 let GIF_PICKER_CALLBACK;
-let LAST_VISITED_FOLDER: Folder | undefined = undefined;
+const LAST_VISITED_FOLDER: Folder | undefined = undefined;
 let IS_READY = true;
 
 export default definePlugin({
@@ -61,9 +61,9 @@ export default definePlugin({
         // subscribing to this event because it's the only event that i know which runs after the gif menu closes
         // also happens when the user clears their gif search but it doesnt affect it
         GIF_PICKER_CALLBACK = ({ query }) => {
-            if (!query) showSelectedGifs(null);
+            if (!query) showSelectedGifs();
         };
-        FluxDispatcher.subscribe("GIF_PICKER_QUERY", ({ query }) => { if (!query) showSelectedGifs(null); });
+        FluxDispatcher.subscribe("GIF_PICKER_QUERY", ({ query }) => { if (!query) showSelectedGifs(); });
     },
 
     stop() {
@@ -81,11 +81,25 @@ export default definePlugin({
                 replace: "onClick:(e)=>($self.saveGif(e, $1))"
             }
         },
+        // {
+        //     find: "\"handleCanPlay\",",
+        //     replacement: {
+        //         match: /\(\)=>{let[^)]*./, // change this to reduce chance of corruption
+        //         replace: "(event)=>{$self.onGifSelect(event, this.props);"
+        //     }
+        // },
         {
-            find: "\"handleCanPlay\",",
+            find: "FIXED_HEIGHT_SMALL_MP4",
             replacement: {
-                match: /\(\)=>{let[^)]*./, // change this to reduce chance of corruption
-                replace: "(event)=>{$self.onGifSelect(event, this.props);"
+                match: /getTrendingCategories\(\){return (\i)}/,
+                replace: "getTrendingCategories(){return $self.getTrendingCategories($1)}"
+            }
+        },
+        {
+            find: "\"handleSelectItem\"",
+            replacement: {
+                match: /"handleSelectItem",\((\i),(\i)\)=>{/,
+                replace: "$&$self.handleSelectItem($1,$2);"
             }
         }
     ],
@@ -104,20 +118,23 @@ export default definePlugin({
         await showSelectedGifs(LAST_VISITED_FOLDER, gifs);
     },
 
-    async onGifSelect(e: React.UIEvent, props) {
-        const { type, name } = props.item;
+    getTrendingCategories(trendingArray) {
+        const categories: Array<{ name: string, src: string, type: string, format: number; }> = [];
 
-        const shouldHandle = IS_READY && type === "Favorites" && name === "Favorites";
-        if (shouldHandle) {
-            e.preventDefault();
-            e.stopPropagation();
-            LAST_VISITED_FOLDER = await openGifMenuAsync(e, getFolders());
+        const folders = getFolders();
+        const folderPreviews = getFolderPreviewGifs();
+
+        for (const { idx, name } of folders.values()) {
+            const gif = folderPreviews.get(idx);
+            categories.push({ name: name, src: gif?.src ?? "", type: "Favorites", format: gif?.format ?? 1 });
         }
 
-        props.onClick?.(props.item, props.index); // original function
+        return categories;
+    },
+
+    async handleSelectItem(type: string, name: string) {
+        const folders = getFolders();
+        await showSelectedGifs(folders.get(name));
     }
 }
 );
-
-
-// add insertion checks

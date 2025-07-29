@@ -18,8 +18,8 @@ export interface Folder {
     end: number;
 }
 
-const FOLDERS: Map<string, Folder> = new Map<string, Folder>();
-const DEFAULT_FOLDER_STEP = 10 ** 5;
+export const FOLDERS: Map<string, Folder> = new Map<string, Folder>();
+export const DEFAULT_FOLDER_STEP = 10 ** 5;
 
 
 export const getFolders = (): Map<string, Folder> => FOLDERS;

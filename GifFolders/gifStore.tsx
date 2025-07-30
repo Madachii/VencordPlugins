@@ -18,9 +18,9 @@ const BINARY_READ_OPTIONS = findByPropsLazy("readerFactory");
 
 const folderGifPreviews = new Map<number, { src: string, format: number; }>();
 
+
 export interface Gif {
     url?: string,
-    className: string,
     src: string,
     width: number,
     height: number,
@@ -56,6 +56,12 @@ export function getKey() {
         return undefined;
     }
     return `GifFolders:gif:${id}`;
+}
+
+export async function startSaveTimer() {
+    await updateGifs();
+    console.log("Ran auto update: ", Date.now());
+    setTimeout(startSaveTimer, 60 * 60 * 1000); // 1 hour
 }
 
 export async function getAllGifs(key?: string | undefined) {
@@ -108,7 +114,7 @@ export async function setFolderPreviewGifs(keyName?: string, gifs?: Record<strin
 
 // change this to get the last free open index instead
 // would it work to Set the values so the editing person can change folders easily?
-export async function handleGifAdd(folder: Folder, gif: Gif, lastVisited: Folder | null = null) { // using incrementing index for now, change later for unique ids or something
+export async function handleGifAdd(folder: Folder, gif: Gif) { // using incrementing index for now, change later for unique ids or something
     if (!allLoaded()) return;
 
     const key = getKey();
@@ -167,6 +173,7 @@ export async function handleGifDelete(gif: Gif, lastVisited: Folder | null = nul
 // return the local array of gifs (affected by FluxDispatcher)
 export async function getAllFavoritedGifs(): Promise<Record<string, Gif> | undefined> {
     if (!allLoaded()) undefined;
+
     const { ok, status, body } = await RestAPI.get({
         url: "/users/@me/settings-proto/2"
     });

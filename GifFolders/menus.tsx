@@ -17,12 +17,11 @@ class MenuBuilder {
     private items: ReactNode[] = [];
     private onClose: () => void = () => FluxDispatcher.dispatch({ type: "CONTEXT_MENU_CLOSE" });
 
-    constructor(gif?: Gif, lastVisited?: Folder | undefined) {
+    constructor(gif?: Gif) {
         this.gif = gif;
-        this.lastVisited = lastVisited;
     }
 
-    addFolder(name: string, label: string, action: () => Promise<Record<string, Gif> | Folder | undefined>, color: string = "brand") {
+    addFolder(name: string, label: string, action: () => Promise<void>, color: string = "brand") {
         this.items.push(
             <Menu.MenuItem
                 key={`folder-${name}`}
@@ -45,24 +44,22 @@ class MenuBuilder {
     }
 }
 
-export function openAddGifMenu(e: React.UIEvent, gif: Gif, folderMap: Map<string, Folder>, lastVisited: Folder | undefined = undefined): Promise<Record<string, Gif> | undefined> {
+export function openAddGifMenu(e: React.UIEvent, gif: Gif, folderMap: Map<string, Folder>): Promise<{ gifs?: Record<string, Gif>, folder?: Folder; }> | undefined {
     const folders = Array.from(folderMap.values());
 
     return new Promise(resolve => {
-        const builder = new MenuBuilder(gif, lastVisited);
+        const builder = new MenuBuilder(gif);
 
         folders.forEach(folder =>
             builder.addFolder(folder.name, `Save to ${folder.name}`, async () => {
-                const result = await handleGifAdd(folder, gif, lastVisited);
-                resolve(result);
-                return result;
+                const result = await handleGifAdd(folder, gif);
+                resolve({ gifs: result });
             })
         );
 
         builder.addFolder("delete", "Delete", async () => {
-            const result = await handleGifDelete(gif, lastVisited);
-            resolve(result);
-            return result;
+            const result = await handleGifDelete(gif);
+            resolve({ gifs: result });
         }, "danger");
 
         ContextMenuApi.openContextMenu(e, () => builder.build());

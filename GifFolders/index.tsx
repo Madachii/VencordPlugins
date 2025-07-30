@@ -9,14 +9,14 @@ import { DataStore } from "@api/index";
 import definePlugin from "@utils/types";
 import { FluxDispatcher, React } from "@webpack/common";
 
-import { AddFolder, DeleteFolder, Folder, getFolders, initializeFolder, RenameFolder } from "./folders";
-import { getAllGifs, getFolderPreviewGifs, initializeGifs, showSelectedGifs } from "./gifStore";
+import { AddFolder, DeleteFolder, Folder, getFolders, initializeFolder, RenameFolder, SwapFolder } from "./folders";
+import { getFolderPreviewGifs, initializeGifs, showSelectedGifs, startSaveTimer } from "./gifStore";
 import { openAddGifMenu } from "./menus";
 import { grabGifProp } from "./utils";
 
 
 let GIF_PICKER_CALLBACK;
-const LAST_VISITED_FOLDER: Folder | undefined = undefined;
+let LAST_VISITED_FOLDER: Folder | undefined = undefined;
 let IS_READY = true;
 
 export default definePlugin({
@@ -60,12 +60,30 @@ export default definePlugin({
         },
         {
             inputType: ApplicationCommandInputType.BUILT_IN,
+            name: "SwapFolder",
+            description: "Change the position of one folder with another!",
+            options: [
+                {
+                    name: "old_name",
+                    description: "Name of the already existing folder",
+                    type: ApplicationCommandOptionType.STRING
+                },
+                {
+                    name: "new_name",
+                    description: "The new name to change it into!",
+                    type: ApplicationCommandOptionType.STRING
+                }
+            ],
+            execute: async (opts, cmd) => SwapFolder(opts, cmd),
+        },
+        {
+            inputType: ApplicationCommandInputType.BUILT_IN,
             name: "DeleteFolder",
             description: "Delete a existing folder!",
             options: [
                 {
                     name: "folder_name",
-                    description: "Write the name of the folder you want to delete", // maybe could list the map?
+                    description: "Write the name of the folder you want to delete",
                     type: ApplicationCommandOptionType.STRING
                 },
             ],
@@ -78,12 +96,15 @@ export default definePlugin({
         IS_READY = await initializeFolder() && await initializeGifs();
         if (!IS_READY) return;
 
+        await startSaveTimer();
         // subscribing to this event because it's the only event that i know which runs after the gif menu closes
         // also happens when the user clears their gif search but it doesnt affect it
         GIF_PICKER_CALLBACK = ({ query }) => {
             if (!query) showSelectedGifs();
         };
         FluxDispatcher.subscribe("GIF_PICKER_QUERY", ({ query }) => { if (!query) showSelectedGifs(); });
+
+
     },
 
     stop() {
@@ -101,13 +122,6 @@ export default definePlugin({
                 replace: "onClick:(e)=>($self.saveGif(e, $1))"
             }
         },
-        // {
-        //     find: "\"handleCanPlay\",",
-        //     replacement: {
-        //         match: /\(\)=>{let[^)]*./, // change this to reduce chance of corruption
-        //         replace: "(event)=>{$self.onGifSelect(event, this.props);"
-        //     }
-        // },
         {
             find: "FIXED_HEIGHT_SMALL_MP4",
             replacement: {
@@ -134,8 +148,8 @@ export default definePlugin({
         e.preventDefault();
         e.stopPropagation();
 
-        const gifs = await openAddGifMenu(e, gif, getFolders(), LAST_VISITED_FOLDER); // could optimize by passing the all gif object in resolve
-        await showSelectedGifs(LAST_VISITED_FOLDER, gifs);
+        const result = await openAddGifMenu(e, gif, getFolders());
+        await showSelectedGifs(LAST_VISITED_FOLDER, result?.gifs);
     },
 
     getTrendingCategories(trendingArray) {
@@ -155,10 +169,14 @@ export default definePlugin({
 
     async handleSelectItem(type: string, name: string) {
         const folders = getFolders();
+        const visited = folders.get(name);
+        LAST_VISITED_FOLDER = visited;
         if (type === "Favorites" && name === "Favorites")
-            await showSelectedGifs(undefined, await getAllGifs());
+            await showSelectedGifs();
         else
-            await showSelectedGifs(folders.get(name));
+            await showSelectedGifs(visited);
+
+        console.log("LAST VISITED FOLDER: ", LAST_VISITED_FOLDER);
     }
 }
 );

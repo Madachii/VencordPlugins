@@ -31,7 +31,6 @@ class MenuBuilder {
                 action={async () => { await action(); }}
             />
         );
-
         return this;
     }
 

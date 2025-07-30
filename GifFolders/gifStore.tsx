@@ -60,7 +60,6 @@ export function getKey() {
 
 export async function startSaveTimer() {
     await updateGifs();
-    console.log("Ran auto update: ", Date.now());
     setTimeout(startSaveTimer, 60 * 60 * 1000); // 1 hour
 }
 

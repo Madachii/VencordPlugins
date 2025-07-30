@@ -9,7 +9,7 @@ import { DataStore } from "@api/index";
 import definePlugin from "@utils/types";
 import { FluxDispatcher, React } from "@webpack/common";
 
-import { AddFolder, DeleteFolder, Folder, getFolders, initializeFolder, RenameFolder, SwapFolder } from "./folders";
+import { AddFolder, DeleteFolder, Folder, getFolders, initializeFolder, RenameFolder } from "./folders";
 import { getFolderPreviewGifs, initializeGifs, showSelectedGifs, startSaveTimer } from "./gifStore";
 import { openAddGifMenu } from "./menus";
 import { grabGifProp } from "./utils";
@@ -58,24 +58,24 @@ export default definePlugin({
             ],
             execute: async (opts, cmd) => RenameFolder(opts, cmd),
         },
-        {
-            inputType: ApplicationCommandInputType.BUILT_IN,
-            name: "SwapFolder",
-            description: "Change the position of one folder with another!",
-            options: [
-                {
-                    name: "old_name",
-                    description: "Name of the already existing folder",
-                    type: ApplicationCommandOptionType.STRING
-                },
-                {
-                    name: "new_name",
-                    description: "The new name to change it into!",
-                    type: ApplicationCommandOptionType.STRING
-                }
-            ],
-            execute: async (opts, cmd) => SwapFolder(opts, cmd),
-        },
+        // {
+        //     inputType: ApplicationCommandInputType.BUILT_IN,
+        //     name: "SwapFolder",
+        //     description: "Change the position of one folder with another!",
+        //     options: [
+        //         {
+        //             name: "old_name",
+        //             description: "Name of the already existing folder",
+        //             type: ApplicationCommandOptionType.STRING
+        //         },
+        //         {
+        //             name: "new_name",
+        //             description: "The new name to change it into!",
+        //             type: ApplicationCommandOptionType.STRING
+        //         }
+        //     ],
+        //     execute: async (opts, cmd) => SwapFolder(opts, cmd),
+        // },
         {
             inputType: ApplicationCommandInputType.BUILT_IN,
             name: "DeleteFolder",

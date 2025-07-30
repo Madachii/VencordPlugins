@@ -96,45 +96,45 @@ export async function RenameFolder(opts: CommandArgument[], cmd?: CommandContext
     await DataStore.set(key, Object.fromEntries(FOLDERS));
 }
 
-export async function SwapFolder(opts: CommandArgument[], cmd?: CommandContext) {
-    if (!opts || opts.length < 1) return;
+// export async function SwapFolder(opts: CommandArgument[], cmd?: CommandContext) {
+//     if (!opts || opts.length < 1) return;
 
-    const key = getKey();
-    if (!key) {
-        new Logger("GifFolders").error("Failed to get id while adding folder");
-        return;
-    }
+//     const key = getKey();
+//     if (!key) {
+//         new Logger("GifFolders").error("Failed to get id while adding folder");
+//         return;
+//     }
 
-    if (opts.length !== 2) {
-        showToast("Please add the old name and also the new name!");
-        return;
-    }
+//     if (opts.length !== 2) {
+//         showToast("Please add the old name and also the new name!");
+//         return;
+//     }
 
-    opts.sort((a, b) => b.name.localeCompare(a.name));
+//     opts.sort((a, b) => b.name.localeCompare(a.name));
 
-    const old_name = opts[0].value.toLowerCase();
-    const new_name = opts[1].value.toLowerCase();
-    if (old_name === new_name) return;
-    if (new_name.length <= 0) {
-        showToast("Please make a valid new name!");
-        return;
-    }
+//     const old_name = opts[0].value.toLowerCase();
+//     const new_name = opts[1].value.toLowerCase();
+//     if (old_name === new_name) return;
+//     if (new_name.length <= 0) {
+//         showToast("Please make a valid new name!");
+//         return;
+//     }
 
-    const old_folder = FOLDERS.get(old_name);
-    const new_folder = FOLDERS.get(new_name);
-    if (!old_folder || !new_folder) {
-        new Logger("GifFolderS").error("Failed to get old folder");
-        return;
-    }
+//     const old_folder = FOLDERS.get(old_name);
+//     const new_folder = FOLDERS.get(new_name);
+//     if (!old_folder || !new_folder) {
+//         new Logger("GifFolderS").error("Failed to get old folder");
+//         return;
+//     }
 
-    FOLDERS.set(old_name, { ...new_folder, name: old_name });
-    FOLDERS.set(new_name, { ...old_folder, name: new_name });
+//     FOLDERS.set(old_name, { ...new_folder, name: old_name });
+//     FOLDERS.set(new_name, { ...old_folder, name: new_name });
 
-    console.log("OLD FOLDER: ", old_folder, " NEW FOLDER: ", new_folder);
+//     console.log("OLD FOLDER: ", old_folder, " NEW FOLDER: ", new_folder);
 
-    showToast(`Succesfully swapped index of ${old_name} to ${new_name}!`);
-    await DataStore.set(key, Object.fromEntries(FOLDERS));
-}
+//     showToast(`Succesfully swapped index of ${old_name} to ${new_name}!`);
+//     await DataStore.set(key, Object.fromEntries(FOLDERS));
+// }
 export async function DeleteFolder(opts: CommandArgument[], cmd: CommandContext) {
     if (!opts || !cmd || opts.length < 1) return;
 

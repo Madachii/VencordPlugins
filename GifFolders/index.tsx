@@ -175,8 +175,6 @@ export default definePlugin({
             await showSelectedGifs();
         else
             await showSelectedGifs(visited);
-
-        console.log("LAST VISITED FOLDER: ", LAST_VISITED_FOLDER);
     }
 }
 );

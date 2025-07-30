@@ -6,10 +6,10 @@
 
 import { Gif } from "./gifStore";
 
-export function grabGifProp(e: React.UIEvent): Gif | null {
+export function grabGifProp(e: React.UIEvent): Gif | undefined {
     const node = e.currentTarget;
     const key = Object.keys(node).find(k => k.startsWith("__reactFiber$"));
-    if (!key || !(key in node)) return null;
+    if (!key || !(key in node)) return;
 
     let fiber = node[key];
     while (fiber) {
@@ -19,7 +19,6 @@ export function grabGifProp(e: React.UIEvent): Gif | null {
         }
         fiber = fiber.return;
     }
-    return null;
 }
 
 export function searchProtoClassField(localName: string, protoClass: any) {

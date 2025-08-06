@@ -5,12 +5,11 @@
  */
 
 import { ApplicationCommandInputType, ApplicationCommandOptionType } from "@api/Commands";
-import { DataStore } from "@api/index";
 import definePlugin from "@utils/types";
 import { FluxDispatcher, React } from "@webpack/common";
 
 import { AddFolder, DeleteFolder, Folder, getFolders, initializeFolder, RenameFolder } from "./folders";
-import { getFolderPreviewGifs, initializeGifs, showSelectedGifs, startSaveTimer } from "./gifStore";
+import { cleanGif, getFolderPreviewGifs, initializeGifs, showSelectedGifs, startSaveTimer } from "./gifStore";
 import { openAddGifMenu } from "./menus";
 import { grabGifProp } from "./utils";
 
@@ -92,7 +91,6 @@ export default definePlugin({
     ],
 
     async start() {
-        console.log(DataStore);
         IS_READY = await initializeFolder() && await initializeGifs();
         if (!IS_READY) return;
 
@@ -148,11 +146,14 @@ export default definePlugin({
         e.preventDefault();
         e.stopPropagation();
 
-        const result = await openAddGifMenu(e, gif, getFolders());
-        await showSelectedGifs(LAST_VISITED_FOLDER, result?.gifs);
+        const cleanedGif = cleanGif(gif);
+        const result = await openAddGifMenu(e, cleanedGif, getFolders());
+        if (LAST_VISITED_FOLDER) await showSelectedGifs(LAST_VISITED_FOLDER, result?.gifs);
     },
 
     getTrendingCategories(trendingArray) {
+        if (!IS_READY) return trendingArray;
+
         const categories: Array<{ name: string, src: string, type: string, format: number; }> = [];
 
         const folders = getFolders();
@@ -168,8 +169,12 @@ export default definePlugin({
     },
 
     async handleSelectItem(type: string, name: string) {
+        if (!IS_READY) return;
+
         const folders = getFolders();
         const visited = folders.get(name);
+
+        console.log("FOLDERS ARE:", folders);
         LAST_VISITED_FOLDER = visited;
         if (type === "Favorites" && name === "Favorites")
             await showSelectedGifs();

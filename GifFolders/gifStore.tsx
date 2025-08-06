@@ -28,7 +28,6 @@ export interface Gif {
     order: number,
 }
 
-
 function allLoaded(): boolean {
     try {
         FrecencyAC.ProtoClass;
@@ -63,6 +62,14 @@ export async function startSaveTimer() {
     setTimeout(startSaveTimer, 60 * 60 * 1000); // 1 hour
 }
 
+export function cleanGif(gif: Gif) {
+    const gifCopy = { ...gif };
+    if ("className" in gifCopy) delete gifCopy.className;
+    if (!gifCopy.url) return gifCopy;
+
+    gifCopy.url = gifCopy.url.split("?")[0];
+    return gifCopy;
+}
 export async function getAllGifs(key?: string | undefined) {
     const allGifs: Record<string, Gif> | undefined = key ? await getAllFavoritedGifsFromDB(key) : await getAllFavoritedGifs();
     if (!allGifs) {
@@ -73,19 +80,37 @@ export async function getAllGifs(key?: string | undefined) {
 }
 
 export async function updateGifs() {
+    console.log("Running gif autosave");
     const key = getKey();
     if (!key) return;
 
-    const allGifs = await getAllGifs(key);
-    if (!allGifs) return;
+    const localGifs = await getAllGifs(key);
+    if (!localGifs) return;
+
+    const discordGifs = await getAllGifs();
+    if (!discordGifs) return;
+
+    console.log(discordGifs, "is the discord gifs", localGifs, " is the local one");
+
+    const allGifs = localGifs;
+    for (const [url, value] of Object.entries(discordGifs)) {
+        if (url in allGifs) {
+            allGifs[url] = { ...value, order: allGifs[url].order };
+        }
+        else {
+            allGifs[url] = value;
+        }
+    }
 
     await FrecencyAC.updateAsync(
         "favoriteGifs",
         data => {
-            data.gifs = { ...allGifs };
+            data.gifs = allGifs;
         },
         0
     );
+
+    await DataStore.set(key, allGifs);
 }
 
 export function getFolderPreviewGifs() {
@@ -258,6 +283,7 @@ export async function showSelectedGifs(folder?: Folder | undefined, gifs?: Recor
 // So we are not going to modify the users gif, instead we are going to add everything they have
 // and then fully use the Vencord db module
 export async function initializeGifs() {
+    console.log("DATA STORE: ", DataStore);
     if (!allLoaded()) return false;
 
     const key = getKey();
@@ -269,14 +295,16 @@ export async function initializeGifs() {
         return false;
     }
 
-    const storedGifs: Record<string, Gif> | undefined = await DataStore.get(key) ?? {};
-    if (Object.keys(storedGifs).length === 0) {
-        for (const [url, value] of Object.entries(allGifs)) {
-            storedGifs[url] = value;
-        }
-    }
+    const storedGifs: Record<string, Gif> = await DataStore.get(key) ?? {};
+    console.log("STORED GIFS: ", storedGifs);
+    // for (const [url, value] of Object.entries(allGifs)) {
+    //     if (url in storedGifs) {
+    //         storedGifs[url].src = value.src;
+    //     }
+    // }
 
     await DataStore.set(key, storedGifs);
     await setFolderPreviewGifs(key, storedGifs);
+    console.log(getAllFavoritedGifs, " FUNC FOR GETTING ALL GIFS");
     return true;
 }

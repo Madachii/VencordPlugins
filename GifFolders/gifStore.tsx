@@ -71,7 +71,7 @@ export function cleanGif(gif: Gif) {
     return gifCopy;
 }
 export async function getAllGifs(key?: string | undefined) {
-    const allGifs: Record<string, Gif> | undefined = key ? await getAllFavoritedGifsFromDB(key) : await getAllFavoritedGifs();
+    const allGifs = key ? await getAllFavoritedGifsFromDB(key) : await getAllFavoritedGifs();
     if (!allGifs) {
         new Logger("GifFolders").error("Failed to grab all gifs");
         return undefined;
@@ -80,7 +80,6 @@ export async function getAllGifs(key?: string | undefined) {
 }
 
 export async function updateGifs() {
-    console.log("Running gif autosave");
     const key = getKey();
     if (!key) return;
 
@@ -89,8 +88,6 @@ export async function updateGifs() {
 
     const discordGifs = await getAllGifs();
     if (!discordGifs) return;
-
-    console.log(discordGifs, "is the discord gifs", localGifs, " is the local one");
 
     const allGifs = localGifs;
     for (const [url, value] of Object.entries(discordGifs)) {
@@ -135,10 +132,7 @@ export async function setFolderPreviewGifs(keyName?: string, gifs?: Record<strin
     return folderGifPreviews;
 }
 
-
-// change this to get the last free open index instead
-// would it work to Set the values so the editing person can change folders easily?
-export async function handleGifAdd(folder: Folder, gif: Gif) { // using incrementing index for now, change later for unique ids or something
+export async function handleGifAdd(folder: Folder, gif: Gif) {
     if (!allLoaded()) return;
 
     const key = getKey();
@@ -159,9 +153,8 @@ export async function handleGifAdd(folder: Folder, gif: Gif) { // using incremen
 
     if (highestOrder + 1 >= folder.end) return; //  should be impossible to reach this
 
-
     allGifs[url] = { ...rest, order: highestOrder + 1 };
-    await DataStore.set(key, allGifs);
+    DataStore.set(key, allGifs);
 
     folderGifPreviews.set(folder.idx, { src: rest.src, format: rest.format });
 
@@ -296,15 +289,17 @@ export async function initializeGifs() {
     }
 
     const storedGifs: Record<string, Gif> = await DataStore.get(key) ?? {};
-    console.log("STORED GIFS: ", storedGifs);
-    // for (const [url, value] of Object.entries(allGifs)) {
-    //     if (url in storedGifs) {
-    //         storedGifs[url].src = value.src;
-    //     }
-    // }
+    for (const [url, value] of Object.entries(allGifs)) {
+        if (url in storedGifs) {
+            storedGifs[url].src = value.src;
+        }
+        else {
+            storedGifs[url] = value;
+        }
+    }
 
     await DataStore.set(key, storedGifs);
     await setFolderPreviewGifs(key, storedGifs);
-    console.log(getAllFavoritedGifs, " FUNC FOR GETTING ALL GIFS");
+
     return true;
 }

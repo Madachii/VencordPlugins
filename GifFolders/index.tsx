@@ -4,15 +4,30 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { ApplicationCommandInputType, ApplicationCommandOptionType } from "@api/Commands";
+import {
+    ApplicationCommandInputType,
+    ApplicationCommandOptionType,
+} from "@api/Commands";
 import definePlugin from "@utils/types";
 import { FluxDispatcher, React } from "@webpack/common";
 
-import { AddFolder, DeleteFolder, Folder, getFolders, initializeFolder, RenameFolder } from "./folders";
-import { cleanGif, getFolderPreviewGifs, initializeGifs, showSelectedGifs, startSaveTimer } from "./gifStore";
+import {
+    AddFolder,
+    DeleteFolder,
+    Folder,
+    getFolders,
+    initializeFolder,
+    RenameFolder,
+} from "./folders";
+import {
+    cleanGif,
+    getFolderPreviewGifs,
+    initializeGifs,
+    showSelectedGifs,
+    startSaveTimer,
+} from "./gifStore";
 import { openAddGifMenu } from "./menus";
 import { grabGifProp } from "./utils";
-
 
 let GIF_PICKER_CALLBACK;
 let LAST_VISITED_FOLDER: Folder | undefined = undefined;
@@ -20,11 +35,14 @@ let IS_READY = true;
 
 export default definePlugin({
     name: "GifFolders",
-    description: "Let's create and organize 'folders' for gifs! Start by running (/AddFolder, /DeleteFolder)",
-    authors: [{
-        name: "Madachi",
-        id: 670129843109672n
-    }],
+    description:
+        "Let's create and organize 'folders' for gifs! Start by running (/AddFolder, /DeleteFolder)",
+    authors: [
+        {
+            name: "Madachi",
+            id: 670129843109672n,
+        },
+    ],
     commands: [
         {
             inputType: ApplicationCommandInputType.BUILT_IN,
@@ -34,7 +52,7 @@ export default definePlugin({
                 {
                     name: "folder_name",
                     description: "Give the folder a name!",
-                    type: ApplicationCommandOptionType.STRING
+                    type: ApplicationCommandOptionType.STRING,
                 },
             ],
             execute: async (opts, cmd) => AddFolder(opts, cmd),
@@ -47,13 +65,13 @@ export default definePlugin({
                 {
                     name: "old_name",
                     description: "Name of the already existing folder",
-                    type: ApplicationCommandOptionType.STRING
+                    type: ApplicationCommandOptionType.STRING,
                 },
                 {
                     name: "new_name",
                     description: "The new name to change it into!",
-                    type: ApplicationCommandOptionType.STRING
-                }
+                    type: ApplicationCommandOptionType.STRING,
+                },
             ],
             execute: async (opts, cmd) => RenameFolder(opts, cmd),
         },
@@ -82,8 +100,9 @@ export default definePlugin({
             options: [
                 {
                     name: "folder_name",
-                    description: "Write the name of the folder you want to delete",
-                    type: ApplicationCommandOptionType.STRING
+                    description:
+                        "Write the name of the folder you want to delete",
+                    type: ApplicationCommandOptionType.STRING,
                 },
             ],
             execute: async (opts, cmd) => DeleteFolder(opts, cmd),
@@ -91,7 +110,7 @@ export default definePlugin({
     ],
 
     async start() {
-        IS_READY = await initializeFolder() && await initializeGifs();
+        IS_READY = (await initializeFolder()) && (await initializeGifs());
         if (!IS_READY) return;
 
         await startSaveTimer();
@@ -100,9 +119,9 @@ export default definePlugin({
         GIF_PICKER_CALLBACK = ({ query }) => {
             if (!query) showSelectedGifs();
         };
-        FluxDispatcher.subscribe("GIF_PICKER_QUERY", ({ query }) => { if (!query) showSelectedGifs(); });
-
-
+        FluxDispatcher.subscribe("GIF_PICKER_QUERY", ({ query }) => {
+            if (!query) showSelectedGifs();
+        });
     },
 
     stop() {
@@ -114,30 +133,32 @@ export default definePlugin({
 
     patches: [
         {
-            find: "gifFavoriteButton,{",
+            find: '["5/NS74"]',
             replacement: {
                 match: /onClick:(\i)/,
-                replace: "onClick:(e)=>($self.saveGif(e, $1))"
-            }
+                replace: "onClick:(e)=>($self.saveGif(e, $1))",
+            },
         },
         {
-            find: "FIXED_HEIGHT_SMALL_MP4",
+            find: "GIF_PICKER_TRENDING_SEARCH_TERMS_SUCCESS",
             replacement: {
                 match: /getTrendingCategories\(\){return (\i)}/,
-                replace: "getTrendingCategories(){return $self.getTrendingCategories($1)}"
-            }
+                replace:
+                    "getTrendingCategories(){return $self.getTrendingCategories($1)}",
+            },
         },
         {
-            find: "\"handleSelectItem\"",
+            find: "handleSelectItem",
             replacement: {
-                match: /"handleSelectItem",\((\i),(\i)\)=>{/,
-                replace: "$&$self.handleSelectItem($1,$2);"
-            }
-        }
+                match: /handleSelectItem=\((\i),((\i))\)=>{/,
+                replace: "$&$self.handleSelectItem($1,$2);",
+            },
+        },
     ],
 
     // restore default if folder missing etc
     async saveGif(e: React.UIEvent, original) {
+        console.log("Hello sheep");
         if (!IS_READY) return original(e);
 
         const gif = grabGifProp(e);
@@ -148,13 +169,19 @@ export default definePlugin({
 
         const cleanedGif = cleanGif(gif);
         const result = await openAddGifMenu(e, cleanedGif, getFolders());
-        if (LAST_VISITED_FOLDER) await showSelectedGifs(LAST_VISITED_FOLDER, result?.gifs);
+        if (LAST_VISITED_FOLDER)
+            await showSelectedGifs(LAST_VISITED_FOLDER, result?.gifs);
     },
 
     getTrendingCategories(trendingArray) {
         if (!IS_READY) return trendingArray;
 
-        const categories: Array<{ name: string, src: string, type: string, format: number; }> = [];
+        const categories: Array<{
+            name: string;
+            src: string;
+            type: string;
+            format: number;
+        }> = [];
 
         const folders = getFolders();
         if (folders.size === 0) return trendingArray;
@@ -162,7 +189,12 @@ export default definePlugin({
         const folderPreviews = getFolderPreviewGifs();
         for (const { idx, name } of folders.values()) {
             const gif = folderPreviews.get(idx);
-            categories.push({ name: name, src: gif?.src ?? "", type: "Favorites", format: gif?.format ?? 1 });
+            categories.push({
+                name: name,
+                src: gif?.src ?? "",
+                type: "Favorites",
+                format: gif?.format ?? 1,
+            });
         }
 
         return categories;
@@ -178,8 +210,6 @@ export default definePlugin({
         LAST_VISITED_FOLDER = visited;
         if (type === "Favorites" && name === "Favorites")
             await showSelectedGifs();
-        else
-            await showSelectedGifs(visited);
-    }
-}
-);
+        else await showSelectedGifs(visited);
+    },
+});

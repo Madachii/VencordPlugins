@@ -43,7 +43,10 @@ export async function AddFolder(opts: CommandArgument[], cmd?: CommandContext) {
         return;
     }
 
-    const afterLast = [...FOLDERS.values()][FOLDERS.size - 1].idx + 1;
+    console.log("Code reacher here :)");
+    const lastFolder = FOLDERS.size > 0 ? [...FOLDERS.values()][FOLDERS.size - 1] : null;
+
+    const afterLast = lastFolder ? lastFolder.idx + 1 : 0;
     const folder = {
         idx: afterLast,
         name: value,

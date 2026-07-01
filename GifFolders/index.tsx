@@ -164,8 +164,8 @@ export default definePlugin({
 
         console.log("D");
 
-        // console.log("LAST VISITED FOLDER: ", LAST_VISITED_FOLDER, " AND RESULT IS: ", result?.gifs)
-        // await showSelectedGifs(LAST_VISITED_FOLDER, result?.gifs);
+        console.log("LAST VISITED FOLDER: ", LAST_VISITED_FOLDER, " AND RESULT IS: ", result?.gifs)
+        await showSelectedGifs(LAST_VISITED_FOLDER, result?.gifs);
     },
 
     // TODO: make it an option if user wants to keep the default trending categories

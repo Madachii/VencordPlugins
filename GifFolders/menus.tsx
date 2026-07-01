@@ -47,14 +47,14 @@ export function openAddGifMenu(e: React.UIEvent, gif: Gif, folderMap: Record<str
             builder.addFolder(folder.name, `Save to ${folder.name}`, async () => {
                 console.log("Trying to save to a folder!")
                 const result = await addLocalGif(folder, gif);
+                await addRemoteGif(gif);
 
-                if (!(gif.url! in getRemoteGifs())) {
-                    console.log("Adding to remote!")
-                    await addRemoteGif(gif);
-                }
+                // if (!(gif.url! in getRemoteGifs())) {
+                //     console.log("Adding to remote!")
+                //     await addRemoteGif(gif);
+                // }
 
                 showToast(`Saved to ${folder.name}!`);
-
                 resolve({ gifs: result });
             })
         );

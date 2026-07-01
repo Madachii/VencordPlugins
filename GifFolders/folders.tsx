@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { findOption } from "@api/Commands";
 import { DataStore } from "@api/index";
 import { Logger } from "@utils/Logger";
 import { CommandArgument, CommandContext } from "@vencord/discord-types";
@@ -16,46 +17,49 @@ export interface Folder {
     end: number;
 }
 
-const FOLDERS: Map<string, Folder> = new Map<string, Folder>();
-export const DEFAULT_FOLDER_STEP = 10 ** 5;
-export const getFolders = (): Map<string, Folder> => FOLDERS;
+type FolderMap = Record<string, Folder>
 
-function getKey() {
+const FOLDERS: FolderMap = {};
+
+export const DEFAULT_FOLDER_STEP = 10 ** 5;
+export const getFolders = () => FOLDERS;
+
+function getKey(): string | undefined {
     const id = UserStore?.getCurrentUser()?.id;
     if (!id) return undefined;
+
     return `GifFolders:folders:${id}`;
+}
+
+async function updateFolders(folders: FolderMap) {
+    const key = getKey();
+    if (!key) return;
+
+    await DataStore.set(key, folders);
 }
 
 export async function AddFolder(opts: CommandArgument[], cmd?: CommandContext) {
     if (!opts || opts.length < 1) return;
 
-    const key = getKey();
-    if (!key) {
-        new Logger("GifFolders").error("Failed to get id while adding folder");
-        return;
-    }
-
     let { value } = opts[0];
 
     value = value.toLowerCase();
-    if (FOLDERS.get(value)) {
+    if (FOLDERS[value]) {
         showToast(`You already have a folder called ${value}!: `);
         return;
     }
 
-    console.log("Code reacher here :)");
-    const lastFolder = FOLDERS.size > 0 ? [...FOLDERS.values()][FOLDERS.size - 1] : null;
-
-    const afterLast = lastFolder ? lastFolder.idx + 1 : 0;
+    const folderValues = Object.values(FOLDERS);
+    const afterLast = (folderValues.at(-1)?.idx ?? -1) + 1;
     const folder = {
         idx: afterLast,
         name: value,
         start: afterLast * DEFAULT_FOLDER_STEP + 1,
-        end: afterLast * DEFAULT_FOLDER_STEP + DEFAULT_FOLDER_STEP
+        end: afterLast * DEFAULT_FOLDER_STEP + DEFAULT_FOLDER_STEP,
     };
 
-    FOLDERS.set(value, folder);
-    DataStore.set(key, Object.fromEntries(FOLDERS));
+    FOLDERS[value] = folder;
+    await updateFolders(FOLDERS);
 
     showToast(`Succesfully created a new folder called: ${value}! `);
 }
@@ -63,97 +67,68 @@ export async function AddFolder(opts: CommandArgument[], cmd?: CommandContext) {
 export async function RenameFolder(opts: CommandArgument[], cmd?: CommandContext) {
     if (!opts || opts.length < 1) return;
 
-    const key = getKey();
-    if (!key) {
-        new Logger("GifFolders").error("Failed to get id while adding folder");
-        return;
-    }
-
     if (opts.length !== 2) {
         showToast("Please add the old name and also the new name!");
         return;
     }
 
-    opts.sort((a, b) => b.name.localeCompare(a.name));
-
-    const old_name = opts[0].value.toLowerCase();
-    const new_name = opts[1].value.toLowerCase();
-    if (old_name === new_name) return;
-    if (new_name.length <= 0) {
+    const old_name = findOption(opts, "old_name", "")?.toLowerCase();
+    const new_name = findOption(opts, "new_name", "")?.toLowerCase();
+    if (!old_name || !new_name || old_name === new_name) return;
+    if (!new_name.length) {
         showToast("Please make a valid new name!");
         return;
     }
 
-    const old_folder = FOLDERS.get(old_name);
+    const old_folder = FOLDERS[old_name];
     if (!old_folder) {
-        new Logger("GifFolderS").error("Failed to get old folder");
+        new Logger("GifFolder").error("Failed to get old folder");
         return;
     }
     old_folder.name = new_name;
 
-    FOLDERS.delete(old_name);
-    FOLDERS.set(new_name, old_folder);
+    delete FOLDERS[old_name];
+    FOLDERS[new_name] = old_folder;
 
     showToast(`Succesfully renamed from ${old_name} to ${new_name}!`);
-    await DataStore.set(key, Object.fromEntries(FOLDERS));
+    await updateFolders(FOLDERS);
 }
 
-// export async function SwapFolder(opts: CommandArgument[], cmd?: CommandContext) {
-//     if (!opts || opts.length < 1) return;
+export async function SwapFolder(opts: CommandArgument[], cmd?: CommandContext) {
+    if (!opts || opts.length !== 2) return;
 
-//     const key = getKey();
-//     if (!key) {
-//         new Logger("GifFolders").error("Failed to get id while adding folder");
-//         return;
-//     }
-
-//     if (opts.length !== 2) {
-//         showToast("Please add the old name and also the new name!");
-//         return;
-//     }
-
-//     opts.sort((a, b) => b.name.localeCompare(a.name));
-
-//     const old_name = opts[0].value.toLowerCase();
-//     const new_name = opts[1].value.toLowerCase();
-//     if (old_name === new_name) return;
-//     if (new_name.length <= 0) {
-//         showToast("Please make a valid new name!");
-//         return;
-//     }
-
-//     const old_folder = FOLDERS.get(old_name);
-//     const new_folder = FOLDERS.get(new_name);
-//     if (!old_folder || !new_folder) {
-//         new Logger("GifFolderS").error("Failed to get old folder");
-//         return;
-//     }
-
-//     FOLDERS.set(old_name, { ...old_folder, name: new_name });
-//     FOLDERS.set(new_name, { ...new_folder, name: old_name });
-
-//     console.log("OLD FOLDER: ", old_folder, " NEW FOLDER: ", new_folder);
-
-//     showToast(`Succesfully swapped index of ${old_name} to ${new_name}!`);
-//     await DataStore.set(key, Object.fromEntries(FOLDERS));
-// }
-export async function DeleteFolder(opts: CommandArgument[], cmd: CommandContext) {
-    if (!opts || !cmd || opts.length < 1) return;
-
-    const key = getKey();
-    if (!key) {
-        new Logger("GifFolders").error("Failed to get id while deleting folder");
+    const firstName = findOption(opts, "first", "")?.toLowerCase();
+    const secondName = findOption(opts, "second", "")?.toLowerCase();
+    if (firstName === secondName) {
+        showToast("Folder names cannot be the same!");
         return;
     }
 
+    const first = FOLDERS[firstName];
+    const second = FOLDERS[secondName];
+    if (!first || !second) {
+        showToast("One or both folders not found!");
+        return;
+    }
+
+    // Swap idx and derived ranges
+    [first.idx, second.idx] = [second.idx, first.idx];
+    [first.start, second.start] = [second.start, first.start];
+    [first.end, second.end] = [second.end, first.end];
+
+    await updateFolders(FOLDERS);
+    showToast(`Swapped ${firstName} with ${secondName}!`);
+}
+export async function DeleteFolder(opts: CommandArgument[], cmd: CommandContext) {
+    if (!opts || !cmd || opts.length < 1) return;
+
     let { value } = opts[0];
     value = value.toLowerCase();
-    if (FOLDERS.delete(value)) {
-        await DataStore.set(key, Object.fromEntries(FOLDERS));
+    if (delete FOLDERS[value]) {
+        await updateFolders(FOLDERS);
         showToast(`Succesfully deleted the folder: ${value}!`);
-    }
-    else {
-        showToast(`Failed to delete folder ${value}, are you sure it exists ? `);
+    } else {
+        showToast(`Failed to delete folder ${value}`);
     }
 }
 
@@ -164,11 +139,7 @@ export async function initializeFolder(): Promise<boolean> {
         return false;
     }
 
-    const storedFolders: Record<string, Folder> = await DataStore.get(key) ?? {};
-    for (const [key, value] of Object.entries(storedFolders)) {
-        FOLDERS.set(key, value);
-    }
+    Object.assign(FOLDERS, (await DataStore.get(key)) ?? {});
 
     return true;
 }
-

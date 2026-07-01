@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { Logger } from "@utils/Logger";
+
 import { Gif } from "./gifStore";
 
 export function grabGifProp(e: React.UIEvent): Gif | undefined {
@@ -19,7 +21,10 @@ export function grabGifProp(e: React.UIEvent): Gif | undefined {
         }
         fiber = fiber.return;
     }
+
+    new Logger("GifFolders").error("Failed to find gif properties from fiber.");
 }
+
 
 export function searchProtoClassField(localName: string, protoClass: any) {
     const field = protoClass?.fields?.find((field: any) => field.localName === localName);

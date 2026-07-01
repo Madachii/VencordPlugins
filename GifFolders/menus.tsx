@@ -4,22 +4,16 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { ContextMenuApi, FluxDispatcher, Menu } from "@webpack/common";
+import { ContextMenuApi, FluxDispatcher, Menu, showToast } from "@webpack/common";
 import { ReactNode } from "react";
 
 import { Folder } from "./folders";
-import { Gif, handleGifAdd, handleGifDelete } from "./gifStore";
+import { addLocalGif, addRemoteGif, deleteLocalGif, deleteRemoteGif, getRemoteGifs, Gif } from "./gifStore";
+import { AddGifMenuResult } from "./types";
 
 class MenuBuilder {
-    private gif: Gif | undefined;
-    private lastVisited: Folder | undefined;
-
     private items: ReactNode[] = [];
     private onClose: () => void = () => FluxDispatcher.dispatch({ type: "CONTEXT_MENU_CLOSE" });
-
-    constructor(gif?: Gif) {
-        this.gif = gif;
-    }
 
     addFolder(name: string, label: string, action: () => Promise<void>, color: string = "brand") {
         this.items.push(
@@ -28,7 +22,7 @@ class MenuBuilder {
                 id={`favorite-folder-${name}`}
                 label={`${label}`}
                 color={color}
-                action={async () => { await action(); }}
+                action={action}
             />
         );
         return this;
@@ -43,21 +37,33 @@ class MenuBuilder {
     }
 }
 
-export function openAddGifMenu(e: React.UIEvent, gif: Gif, folderMap: Map<string, Folder>): Promise<{ gifs?: Record<string, Gif>, folder?: Folder; }> | undefined {
-    const folders = Array.from(folderMap.values());
+export function openAddGifMenu(e: React.UIEvent, gif: Gif, folderMap: Record<string, Folder>): Promise<AddGifMenuResult> | undefined {
+    const folders = Object.values(folderMap);
 
     return new Promise(resolve => {
-        const builder = new MenuBuilder(gif);
+        const builder = new MenuBuilder();
 
         folders.forEach(folder =>
             builder.addFolder(folder.name, `Save to ${folder.name}`, async () => {
-                const result = await handleGifAdd(folder, gif);
+                console.log("Trying to save to a folder!")
+                const result = await addLocalGif(folder, gif);
+
+                if (!(gif.url! in getRemoteGifs())) {
+                    console.log("Adding to remote!")
+                    await addRemoteGif(gif);
+                }
+
+                showToast(`Saved to ${folder.name}!`);
+
                 resolve({ gifs: result });
             })
         );
 
         builder.addFolder("delete", "Delete", async () => {
-            const result = await handleGifDelete(gif);
+            console.log("Trying to delete a gif!");
+            const result = await deleteLocalGif(gif);
+            await deleteRemoteGif(gif);
+            showToast("Gif deleted!");
             resolve({ gifs: result });
         }, "danger");
 

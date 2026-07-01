@@ -30,36 +30,26 @@ function setFolderPreview(idx: number, preview: FolderPreviewGif) {
 export const getRemoteGifs = () => remoteGifs;
 export const setRemoteGifs = (gifs: GifMap) => { remoteGifs = gifs; };
 
-export function addToRemoteGifs(gif: Gif) {
-    if (!gif.url) return;
-    const order = getNextHighestOrder(remoteGifs, () => true, 1);
-    remoteGifs[gif.url] = { ...gif, order };
-}
 
-export function removeFromRemoteGifs({ url }: Gif) {
-    if (url) delete remoteGifs[url];
-}
-
+// switch order to first add inside of remote gifs
 export async function addRemoteGif(gif: Gif) {
     if (!gif.url) return;
+
     const order = getNextHighestOrder(remoteGifs, () => true, 1);
-    const clean = { ...remoteGifs, [gif.url]: { ...gif, order } };
-    await FrecencyAC.updateAsync("favoriteGifs", t => { t.gifs = clean; }, 0);
     remoteGifs[gif.url] = { ...gif, order };
+
+    await patchRemoteGifs(remoteGifs);
 }
 
 export async function deleteRemoteGif(gif: Gif) {
     if (!gif.url) return;
-    const clean = { ...remoteGifs };
-    delete clean[gif.url];
 
-    const proto = generateProtoFromGifs(clean);
-    FrecencyAC.markDirty(proto, { delaySeconds: 0, dispatch: false });
-    console.log("After mark dirty");
     delete remoteGifs[gif.url];
+    await patchRemoteGifs(remoteGifs);
+
 }
 
-export interface Gif {
+export type Gif = {
     url?: string,
     src: string,
     width: number,
@@ -122,7 +112,7 @@ export function cleanGif(gif: Gif) {
     if (!gif.url) return gif;
 
     const cleaned = { ...gif, url: gif.url.split("?")[0] };
-    delete (cleaned as any).className;
+    delete (cleaned as any).className; // side effect from grabbing gif through fiber
     return cleaned;
 }
 
@@ -234,6 +224,12 @@ export async function getAllRemoteGifs(): Promise<GifMap | undefined> {
     return end.favoriteGifs.gifs;
 }
 
+export async function patchRemoteGifs(gifs: GifMap) {
+    const proto = generateProtoFromGifs(gifs);
+
+    // updateAsync does a local update that causes an extra flicker, so we call markDirty instead.
+    FrecencyAC.markDirty(proto, { delaySeconds: 0, dispatch: false });
+}
 async function getAllLocalGifs(): Promise<GifMap | undefined> {
     const key = getKey();
     if (!key) return undefined;
@@ -247,25 +243,10 @@ async function getAllLocalGifs(): Promise<GifMap | undefined> {
     return storedGifs;
 }
 
+
 function generateProtoFromGifs(gifs: GifMap) {
     const proto = FrecencyAC.ProtoClass.create();
-    if (!gifs || Object.keys(gifs).length === 0) {
-        proto.favoriteGifs = { gifs: {} };
-        return proto;
-    }
-
-    const currentGifsProto = FrecencyAC.getCurrentValue().favoriteGifs;
-
-    const newGifProto = currentGifsProto !== null ?
-        FavoriteAC.fromBinary(
-            FavoriteAC.toBinary(currentGifsProto),
-            BINARY_READ_OPTIONS,
-        ) :
-        FavoriteAC.create();
-
-    newGifProto.gifs = gifs;
-    proto.favoriteGifs = newGifProto;
-
+    proto.favoriteGifs = FavoriteAC.create({ gifs });
     return proto;
 }
 
@@ -274,6 +255,7 @@ export async function showSelectedGifs(folder?: Folder | undefined, gifs?: GifMa
 
     if (!folder) {
         displayGifs = gifs || remoteGifs;
+        console.log("Gifs are: ", gifs, " rmeote gifs are: ", remoteGifs);
     } else {
         const allGifs = gifs || await getAllLocalGifs();
         console.log("ALL GIFS ARE: ", allGifs);
@@ -304,12 +286,16 @@ async function syncGifs(storedGifs: GifMap, importNew: boolean): Promise<void> {
     const discordGifs = await getAllRemoteGifs();
     if (!discordGifs) return;
 
+    console.log("[syncGifs] discordGifs: ", discordGifs);
+
     remoteGifs = {};
-    for (const gif of Object.values(discordGifs)) {
-        const cleaned = cleanGif(gif);
+    for (const [url, gif] of Object.entries(discordGifs)) {
+        const cleaned = cleanGif({ ...gif, url });
         if (!cleaned.url) continue;
 
-        remoteGifs[cleaned.url] = gif;
+        remoteGifs[cleaned.url] = { ...gif, url: cleaned.url };
+
+        console.log("[syncGifs] remote gifs are: ", remoteGifs);
 
         if (cleaned.url in storedGifs) {
             storedGifs[cleaned.url] = {
@@ -321,6 +307,8 @@ async function syncGifs(storedGifs: GifMap, importNew: boolean): Promise<void> {
         }
     }
 
+    console.log("[syncGifs] storedGifs are: ", storedGifs);
+    console.log("[syncGifs] remote gifs are: ", remoteGifs);
     await updateLocalGifs(storedGifs);
 }
 

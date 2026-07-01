@@ -5,18 +5,15 @@
  */
 
 import { ApplicationCommandInputType, ApplicationCommandOptionType } from "@api/Commands";
-import { Logger } from "@utils/Logger";
 import definePlugin from "@utils/types";
-import { FluxDispatcher, React } from "@webpack/common";
+import { React } from "@webpack/common";
 
 import { AddFolder, DeleteFolder, Folder, getFolders, initializeFolder, RenameFolder, SwapFolder } from "./folders";
 import { cleanGif, getFolderPreviewGifs, importGifsFromDiscord, setRemoteGifs, showSelectedGifs } from "./gifStore";
-import { openAddGifMenu } from "./menus";
+import { openGifMenu } from "./menus";
 import { TrendingCategory } from "./types";
 import { grabGifProp } from "./utils";
 
-let GIF_PICKER_CALLBACK;
-let USER_SETTINGS_PROTO_UPDATE_CALLBACK;
 let LAST_VISITED_FOLDER: Folder | undefined = undefined;
 let IS_READY = false;
 
@@ -93,40 +90,29 @@ export default definePlugin({
             execute: async (opts, cmd) => DeleteFolder(opts, cmd),
         },
     ],
-
-    async start() {
-        IS_READY = (await initializeFolder()) && (await importGifsFromDiscord({ importNew: false }));
-        if (!IS_READY) return;
-
-        // await startSaveTimer();
+    flux: {
         // subscribing to this event because it's the only event that i know which runs after the gif menu closes
         // also happens when the user clears their gif search but it doesnt affect it
-        GIF_PICKER_CALLBACK = ({ query }) => {
+        GIF_PICKER_QUERY({ query }) {
+            if (!IS_READY) return;
             if (!query) showSelectedGifs();
-        };
-        FluxDispatcher.subscribe("GIF_PICKER_QUERY", GIF_PICKER_CALLBACK);
+        },
 
-        // syincing between clients, also just in case.
-        USER_SETTINGS_PROTO_UPDATE_CALLBACK = (event: any) => {
+
+        // this still causes a small flicker, alternative would be to intercept it but
+        // i don't think it's worth doing
+        USER_SETTINGS_PROTO_UPDATE(event: any) {
+            if (!IS_READY) return;
             if (event.local || event.settings?.type !== 2) return;
 
             const gifs = event.settings?.proto?.favoriteGifs?.gifs;
-            if (!gifs) return;
-
-            setRemoteGifs(gifs);
-        };
-        FluxDispatcher.subscribe("USER_SETTINGS_PROTO_UPDATE", USER_SETTINGS_PROTO_UPDATE_CALLBACK);
+            if (gifs) setRemoteGifs(gifs);
+            if (LAST_VISITED_FOLDER) showSelectedGifs(LAST_VISITED_FOLDER);
+        },
     },
 
-    stop() {
-        if (GIF_PICKER_CALLBACK) {
-            FluxDispatcher.unsubscribe("GIF_PICKER_QUERY", GIF_PICKER_CALLBACK);
-            GIF_PICKER_CALLBACK = null;
-        }
-        if (USER_SETTINGS_PROTO_UPDATE_CALLBACK) {
-            FluxDispatcher.unsubscribe("USER_SETTINGS_PROTO_UPDATE", USER_SETTINGS_PROTO_UPDATE_CALLBACK);
-            USER_SETTINGS_PROTO_UPDATE_CALLBACK = null;
-        }
+    async start() {
+        IS_READY = (await initializeFolder()) && (await importGifsFromDiscord({ importNew: false }));
     },
 
     patches: [
@@ -160,9 +146,7 @@ export default definePlugin({
         if (!gif?.url) return original(e)
 
         const cleanedGif = cleanGif(gif);
-        const result = await openAddGifMenu(e, cleanedGif, getFolders());
-
-        console.log("D");
+        const result = await openGifMenu(e, cleanedGif, getFolders());
 
         console.log("LAST VISITED FOLDER: ", LAST_VISITED_FOLDER, " AND RESULT IS: ", result?.gifs)
         await showSelectedGifs(LAST_VISITED_FOLDER, result?.gifs);
@@ -199,6 +183,7 @@ export default definePlugin({
         const visited = folders[name];
 
         LAST_VISITED_FOLDER = visited;
+        console.log("Last visited: ", LAST_VISITED_FOLDER);
         showSelectedGifs(visited);
     },
 });

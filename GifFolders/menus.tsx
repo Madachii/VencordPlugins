@@ -8,12 +8,12 @@ import { ContextMenuApi, FluxDispatcher, Menu, showToast } from "@webpack/common
 import { ReactNode } from "react";
 
 import { Folder } from "./folders";
-import { addLocalGif, addRemoteGif, deleteLocalGif, deleteRemoteGif, getRemoteGifs, Gif } from "./gifStore";
+import { addLocalGif, addRemoteGif, deleteLocalGif, deleteRemoteGif, Gif } from "./gifStore";
 import { AddGifMenuResult } from "./types";
 
 class MenuBuilder {
     private items: ReactNode[] = [];
-    private onClose: () => void = () => FluxDispatcher.dispatch({ type: "CONTEXT_MENU_CLOSE" });
+    private onClose = () => FluxDispatcher.dispatch({ type: "CONTEXT_MENU_CLOSE" });
 
     addFolder(name: string, label: string, action: () => Promise<void>, color: string = "brand") {
         this.items.push(
@@ -37,32 +37,33 @@ class MenuBuilder {
     }
 }
 
-export function openAddGifMenu(e: React.UIEvent, gif: Gif, folderMap: Record<string, Folder>): Promise<AddGifMenuResult> | undefined {
-    const folders = Object.values(folderMap);
-
+export function openGifMenu(e: React.UIEvent, gif: Gif, folderMap: Record<string, Folder>): Promise<AddGifMenuResult> | undefined {
     return new Promise(resolve => {
         const builder = new MenuBuilder();
 
-        folders.forEach(folder =>
-            builder.addFolder(folder.name, `Save to ${folder.name}`, async () => {
-                console.log("Trying to save to a folder!")
-                const result = await addLocalGif(folder, gif);
-                await addRemoteGif(gif);
+        builder.addFolder("discord", "Save to Discord", async () => {
+            console.log("Trying to save to discord!");
+            await addRemoteGif(gif);
 
-                // if (!(gif.url! in getRemoteGifs())) {
-                //     console.log("Adding to remote!")
-                //     await addRemoteGif(gif);
-                // }
+            showToast("Saved to discord!");
+            resolve({});
+        });
+
+        for (const folder of Object.values(folderMap)) {
+            builder.addFolder(folder.name, `Save to ${folder.name}`, async () => {
+                console.log("Trying to save to a folder!");
+                const result = await addLocalGif(folder, gif);
 
                 showToast(`Saved to ${folder.name}!`);
                 resolve({ gifs: result });
-            })
-        );
+            });
+        }
 
         builder.addFolder("delete", "Delete", async () => {
             console.log("Trying to delete a gif!");
             const result = await deleteLocalGif(gif);
             await deleteRemoteGif(gif);
+
             showToast("Gif deleted!");
             resolve({ gifs: result });
         }, "danger");

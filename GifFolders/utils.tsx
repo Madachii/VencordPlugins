@@ -6,9 +6,10 @@
 
 import { Logger } from "@utils/Logger";
 
-import { Gif } from "./gifStore";
+import { RawGif } from "./types";
 
-export function grabGifProp(e: React.UIEvent): Gif | undefined {
+// props contain a useless .className we don't want
+export function grabGifProp(e: React.UIEvent): RawGif | undefined {
     const node = e.currentTarget;
     const key = Object.keys(node).find(k => k.startsWith("__reactFiber$"));
     if (!key || !(key in node)) return;
@@ -16,8 +17,11 @@ export function grabGifProp(e: React.UIEvent): Gif | undefined {
     let fiber = node[key];
     while (fiber) {
         const props = fiber.memoizedProps || fiber.pendingProps;
-        if (props?.gif || (props?.src && props?.url)) {
-            return props;
+        if (props) {
+            const { src, url, format, width, height } = props;
+            if (src && url && format && width && height) {
+                return { src, url, format, width, height };
+            }
         }
         fiber = fiber.return;
     }

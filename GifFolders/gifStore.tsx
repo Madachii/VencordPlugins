@@ -10,7 +10,7 @@ import { findByPropsLazy, proxyLazyWebpack } from "@webpack";
 import { FluxDispatcher, RestAPI, UserSettingsActionCreators, UserStore } from "@webpack/common";
 
 import { DEFAULT_FOLDER_STEP, Folder } from "./folders";
-import { FolderPreviewGif, GifImportOptions, GifMap } from "./types";
+import { FolderPreviewGif, GifImportOptions, GifMap, RawGif } from "./types";
 import { searchProtoClassField } from "./utils";
 
 const FrecencyAC = proxyLazyWebpack(() => UserSettingsActionCreators.FrecencyUserSettingsActionCreators);
@@ -19,72 +19,44 @@ const BINARY_READ_OPTIONS = findByPropsLazy("readerFactory");
 
 const folderGifPreviews = new Map<number, FolderPreviewGif>();
 
-// We are keeping a local copy of the remote gifs, because the local one gets modified with the new orders
-// I think discord retries request on rate-limit or others, so technically this should stay in sync fully?
-let remoteGifs: GifMap = {};
-
+export const getFolderPreviewGifs = () => folderGifPreviews;
 function setFolderPreview(idx: number, preview: FolderPreviewGif) {
     folderGifPreviews.set(idx, preview);
 }
+
+// We are keeping a local copy of the remote gifs, because the local one gets modified with the new orders
+// I think discord retries request on rate-limit or others, so technically this should stay in sync fully?
+let remoteGifs: GifMap = {};
 
 export const getRemoteGifs = () => remoteGifs;
 export const setRemoteGifs = (gifs: GifMap) => { remoteGifs = gifs; };
 
 
-// switch order to first add inside of remote gifs
-export async function addRemoteGif(gif: Gif) {
-    if (!gif.url) return;
+export async function addRemoteGif(gif: RawGif) {
+    const { url, ...rest } = gif;
 
-    const order = getNextHighestOrder(remoteGifs, () => true, 1);
-    remoteGifs[gif.url] = { ...gif, order };
+    const order = Object.values(remoteGifs).reduce((h, g) => Math.max(h, g.order), 0) + 1;
+    remoteGifs[url] = { ...rest, order };
 
     await patchRemoteGifs(remoteGifs);
 }
 
-export async function deleteRemoteGif(gif: Gif) {
-    if (!gif.url) return;
-
+export async function deleteRemoteGif(gif: RawGif) {
     delete remoteGifs[gif.url];
     await patchRemoteGifs(remoteGifs);
 
 }
 
-export type Gif = {
-    url?: string,
-    src: string,
-    width: number,
-    height: number,
-    format: number,
-    order: number,
-}
+function getNextOrderForGif(folder: Folder, allGifs: GifMap): number {
+    const max = Object.values(allGifs)
+        .filter(g => g.order >= folder.start && g.order < folder.end)
+        .reduce((h, g) => Math.max(h, g.order), folder.start - 1);
 
-
-export const getFolderPreviewGifs = () => folderGifPreviews;
-
-function allLoaded(): boolean {
-    try {
-        FrecencyAC.ProtoClass;
-    }
-    catch (e) {
-        new Logger("GifFolders").error("Frecency is not initialized");
-        return false;
+    if (max >= folder.end - 1) {
+        throw new Error("Folder is too full"); // should be impossible to reach, but just in case
     }
 
-    try {
-        BINARY_READ_OPTIONS.readerFactory;
-    }
-    catch (e) {
-        new Logger("GifFolders").error("BINARY_READ_OPTIONS is not initialized");
-        return false;
-    }
-
-    return true;
-}
-
-function getNextHighestOrder(gifs: GifMap, filter: (g: Gif) => boolean, fallback: number): number {
-    return Object.values(gifs)
-        .filter(filter)
-        .reduce((highest, gif) => highest > gif.order ? highest : gif.order, fallback - 1) + 1;
+    return max + 1;
 }
 
 function getKey() {
@@ -108,11 +80,8 @@ async function updateLocalGifs(gifs: GifMap) {
 //     setTimeout(startSaveTimer, 60 * 60 * 1000); // 1 hour
 // }
 
-export function cleanGif(gif: Gif) {
-    if (!gif.url) return gif;
-
+export function cleanGif(gif: RawGif) {
     const cleaned = { ...gif, url: gif.url.split("?")[0] };
-    delete (cleaned as any).className; // side effect from grabbing gif through fiber
     return cleaned;
 }
 
@@ -165,22 +134,13 @@ export async function setFolderPreviewGifs(gifs?: GifMap) {
     return folderGifPreviews;
 }
 
-export async function addLocalGif(folder: Folder, gif: Gif) {
+export async function addLocalGif(folder: Folder, rawGif: RawGif) {
     const allGifs = await getAllLocalGifs();
     if (!allGifs) return;
 
-    // just store url in both, stop stripping
-    const { url, ...rest } = gif;
-    if (!url) {
-        new Logger("GifFolders").error("Failed to grab the url!");
-        return;
-    }
+    const { url, ...rest } = rawGif;
 
-    const nextOrder = getNextHighestOrder(allGifs,
-        gif => gif.order >= folder.start && gif.order < folder.end,
-        folder.start);
-
-    if (nextOrder >= folder.end) return; // should be impossible to reach this
+    const nextOrder = getNextOrderForGif(folder, allGifs);
 
     allGifs[url] = { ...rest, order: nextOrder };
     await updateLocalGifs(allGifs);
@@ -190,15 +150,10 @@ export async function addLocalGif(folder: Folder, gif: Gif) {
     return allGifs;
 }
 
-export async function deleteLocalGif(gif: Gif) {
-    if (!gif?.url) {
-        new Logger("GifFolders").error("Received a invalid gif");
-        return;
-    }
-
+export async function deleteLocalGif(rawGif: RawGif) {
     const allGifs = await getAllLocalGifs();
-    if (allGifs && gif.url in allGifs) {
-        delete allGifs[gif.url];
+    if (allGifs && rawGif.url in allGifs) {
+        delete allGifs[rawGif.url];
         await updateLocalGifs(allGifs);
     }
 
@@ -250,6 +205,16 @@ function generateProtoFromGifs(gifs: GifMap) {
     return proto;
 }
 
+function getFolderGifs(gifs: GifMap, folder: Folder) {
+    const result: GifMap = {};
+    for (const [url, gif] of Object.entries(gifs)) {
+        if (gif.order >= folder.start && gif.order < folder.end)
+            result[url] = gif;
+    }
+
+    return result;
+}
+
 export async function showSelectedGifs(folder?: Folder | undefined, gifs?: GifMap | null) {
     let displayGifs: GifMap;
 
@@ -261,11 +226,7 @@ export async function showSelectedGifs(folder?: Folder | undefined, gifs?: GifMa
         console.log("ALL GIFS ARE: ", allGifs);
         if (!allGifs) return;
 
-        displayGifs = {};
-        for (const [url, gif] of Object.entries(allGifs)) {
-            if (gif.order >= folder.start && gif.order < folder.end)
-                displayGifs[url] = gif;
-        }
+        displayGifs = getFolderGifs(allGifs, folder)
     }
 
     const proto = generateProtoFromGifs(displayGifs);
@@ -293,9 +254,7 @@ async function syncGifs(storedGifs: GifMap, importNew: boolean): Promise<void> {
         const cleaned = cleanGif({ ...gif, url });
         if (!cleaned.url) continue;
 
-        remoteGifs[cleaned.url] = { ...gif, url: cleaned.url };
-
-        console.log("[syncGifs] remote gifs are: ", remoteGifs);
+        remoteGifs[cleaned.url] = gif;
 
         if (cleaned.url in storedGifs) {
             storedGifs[cleaned.url] = {
@@ -313,8 +272,6 @@ async function syncGifs(storedGifs: GifMap, importNew: boolean): Promise<void> {
 }
 
 export async function importGifsFromDiscord(options: GifImportOptions = { importNew: true }) {
-    if (!allLoaded()) return false;
-
     const storedGifs = await getAllLocalGifs() ?? {};
     await syncGifs(storedGifs, options.importNew);
     await setFolderPreviewGifs(storedGifs);

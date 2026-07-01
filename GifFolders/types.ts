@@ -5,7 +5,6 @@
  */
 
 import { Folder } from "./folders";
-import { Gif } from "./gifStore";
 
 export interface TrendingCategory {
     name: string;
@@ -20,12 +19,25 @@ export interface FolderPreviewGif {
 }
 
 export interface AddGifMenuResult {
-    gifs?: Record<string, Gif>;
+    gifs?: GifMap;
     folder?: Folder;
 }
 
-export type GifMap = Record<string, Gif>;
+export type GifMap = Record<string, GifData>;
 
 export interface GifImportOptions {
     importNew: boolean;
 }
+
+
+export type RawGif = {
+    url: string,
+    src: string,
+    format: number,
+    height: number,
+    width: number
+}
+
+export type Gif = RawGif & { order: number }
+
+export type GifData = Omit<Gif, "url">;

@@ -8,8 +8,8 @@ import { ContextMenuApi, FluxDispatcher, Menu, showToast } from "@webpack/common
 import { ReactNode } from "react";
 
 import { Folder } from "./folders";
-import { addLocalGif, addRemoteGif, deleteLocalGif, deleteRemoteGif, Gif } from "./gifStore";
-import { AddGifMenuResult } from "./types";
+import { addLocalGif, addRemoteGif, deleteLocalGif, deleteRemoteGif, } from "./gifStore";
+import { AddGifMenuResult, RawGif } from "./types";
 
 class MenuBuilder {
     private items: ReactNode[] = [];
@@ -37,7 +37,7 @@ class MenuBuilder {
     }
 }
 
-export function openGifMenu(e: React.UIEvent, gif: Gif, folderMap: Record<string, Folder>): Promise<AddGifMenuResult> | undefined {
+export function openGifMenu(e: React.UIEvent, gif: RawGif, folderMap: Record<string, Folder>): Promise<AddGifMenuResult> | undefined {
     return new Promise(resolve => {
         const builder = new MenuBuilder();
 

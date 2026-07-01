@@ -143,7 +143,7 @@ export default definePlugin({
         if (!IS_READY) return original(e);
 
         const gif = grabGifProp(e);
-        if (!gif?.url) return original(e)
+        if (!gif) return original(e)
 
         const cleanedGif = cleanGif(gif);
         const result = await openGifMenu(e, cleanedGif, getFolders());

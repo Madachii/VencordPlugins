@@ -17,7 +17,7 @@ export interface Folder {
     end: number;
 }
 
-type FolderMap = Record<string, Folder>
+type FolderMap = Record<string, Folder>;
 
 const FOLDERS: FolderMap = {};
 

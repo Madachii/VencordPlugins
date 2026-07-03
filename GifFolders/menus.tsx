@@ -4,18 +4,21 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { DiscordIcon } from "@plugins/betterSessions/components/icons";
 import { ContextMenuApi, FluxDispatcher, Menu, showToast } from "@webpack/common";
-import { ReactNode } from "react";
+import { ComponentType, ReactNode } from "react";
 
 import { Folder } from "./folders";
 import { addLocalGif, addRemoteGif, deleteLocalGif, deleteRemoteGif, } from "./gifStore";
+import { FolderIcon, TrashIcon } from "./icons";
 import { AddGifMenuResult, RawGif } from "./types";
+import { DeleteIcon } from "@components/Icons";
 
 class MenuBuilder {
     private items: ReactNode[] = [];
     private onClose = () => FluxDispatcher.dispatch({ type: "CONTEXT_MENU_CLOSE" });
 
-    addFolder(name: string, label: string, action: () => Promise<void>, color: string = "brand") {
+    addFolder(name: string, label: string, action: () => Promise<void>, icon: ComponentType<any>, color: string = "brand") {
         this.items.push(
             <Menu.MenuItem
                 key={`folder-${name}`}
@@ -23,6 +26,12 @@ class MenuBuilder {
                 label={`${label}`}
                 color={color}
                 action={action}
+                icon={icon}
+                // icon={() =>
+                //  <svg width="16" height="16" viewBox="0 0 24 24">
+                //     <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                //     </svg>
+                // }
             />
         );
         return this;
@@ -47,7 +56,7 @@ export function openGifMenu(e: React.UIEvent, gif: RawGif, folderMap: Record<str
 
             showToast("Saved to discord!");
             resolve({});
-        });
+        }, DiscordIcon, "brand");
 
         for (const folder of Object.values(folderMap)) {
             builder.addFolder(folder.name, `Save to ${folder.name}`, async () => {
@@ -56,7 +65,7 @@ export function openGifMenu(e: React.UIEvent, gif: RawGif, folderMap: Record<str
 
                 showToast(`Saved to ${folder.name}!`);
                 resolve({ gifs: result });
-            });
+            }, FolderIcon);
         }
 
         builder.addFolder("delete", "Delete", async () => {
@@ -66,7 +75,7 @@ export function openGifMenu(e: React.UIEvent, gif: RawGif, folderMap: Record<str
 
             showToast("Gif deleted!");
             resolve({ gifs: result });
-        }, "danger");
+        }, DeleteIcon, "danger");
 
         ContextMenuApi.openContextMenu(e, () => builder.build());
     });

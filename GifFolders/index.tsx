@@ -6,10 +6,9 @@
 
 import { ApplicationCommandInputType, ApplicationCommandOptionType } from "@api/Commands";
 import definePlugin from "@utils/types";
-import { React } from "@webpack/common";
 
 import { AddFolder, DeleteFolder, Folder, getFolders, initializeFolder, RenameFolder, SwapFolder } from "./folders";
-import { cleanGif, getFolderPreviewGifs, importGifsFromDiscord, setRemoteGifs, showSelectedGifs } from "./gifStore";
+import { cleanGif, getFolderPreviewGifs, importGifsFromDiscord, refreshLocalStaleGifs, showRemoteGifs, showSelectedGifs, syncLocalGifs, syncRemoteGifs } from "./gifStore";
 import { openGifMenu } from "./menus";
 import { TrendingCategory } from "./types";
 import { grabGifProp } from "./utils";
@@ -90,12 +89,14 @@ export default definePlugin({
             execute: async (opts, cmd) => DeleteFolder(opts, cmd),
         },
     ],
+
+
     flux: {
         // subscribing to this event because it's the only event that i know which runs after the gif menu closes
         // also happens when the user clears their gif search but it doesnt affect it
         GIF_PICKER_QUERY({ query }) {
             if (!IS_READY) return;
-            if (!query) showSelectedGifs();
+            if (!query) showRemoteGifs();
         },
 
 
@@ -106,13 +107,17 @@ export default definePlugin({
             if (event.local || event.settings?.type !== 2) return;
 
             const gifs = event.settings?.proto?.favoriteGifs?.gifs;
-            if (gifs) setRemoteGifs(gifs);
+            if (!gifs) return;
+
+            syncRemoteGifs(gifs);
+            syncLocalGifs(gifs);
             if (LAST_VISITED_FOLDER) showSelectedGifs(LAST_VISITED_FOLDER);
         },
     },
 
     async start() {
-        IS_READY = (await initializeFolder()) && (await importGifsFromDiscord({ importNew: false }));
+        IS_READY = (await initializeFolder()) && (await importGifsFromDiscord());
+        refreshLocalStaleGifs()
     },
 
     patches: [
@@ -143,18 +148,19 @@ export default definePlugin({
         if (!IS_READY) return original(e);
 
         const gif = grabGifProp(e);
-        if (!gif) return original(e)
+        if (!gif) return original(e);
 
         const cleanedGif = cleanGif(gif);
         const result = await openGifMenu(e, cleanedGif, getFolders());
 
-        console.log("LAST VISITED FOLDER: ", LAST_VISITED_FOLDER, " AND RESULT IS: ", result?.gifs)
-        await showSelectedGifs(LAST_VISITED_FOLDER, result?.gifs);
+        if (LAST_VISITED_FOLDER) await showSelectedGifs(LAST_VISITED_FOLDER);
+        else showRemoteGifs();
     },
 
     // TODO: make it an option if user wants to keep the default trending categories
     getTrendingCategories(trendingArray) {
         if (!IS_READY) return trendingArray;
+        console.log("is this really mepty: ", trendingArray);
 
         const categories: Array<TrendingCategory> = [];
 
@@ -172,7 +178,9 @@ export default definePlugin({
             });
         }
 
-        return categories;
+        if (true) categories.push(...trendingArray);
+        console.log("TRENDING: ", trendingArray, " CATEGORIES: ", categories);
+        return categories
     },
 
     async handleSelectItem(type: string, name: string) {
@@ -183,7 +191,7 @@ export default definePlugin({
         const visited = folders[name];
 
         LAST_VISITED_FOLDER = visited;
-        console.log("Last visited: ", LAST_VISITED_FOLDER);
-        showSelectedGifs(visited);
+        if (visited) showSelectedGifs(visited);
+        else showRemoteGifs();
     },
 });

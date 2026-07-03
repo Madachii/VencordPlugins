@@ -10,7 +10,7 @@ import { Logger } from "@utils/Logger";
 import { CommandArgument, CommandContext } from "@vencord/discord-types";
 import { showToast, UserStore } from "@webpack/common";
 
-export interface Folder {
+export type Folder = {
     idx: number;
     name: string;
     start: number;

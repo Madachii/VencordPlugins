@@ -36,8 +36,8 @@ export type RawGif = {
     format: number,
     height: number,
     width: number
-}
+};
 
-export type Gif = RawGif & { order: number }
+export type Gif = RawGif & { order: number };
 
 export type GifData = Omit<Gif, "url">;

@@ -17,7 +17,7 @@ export type Folder = {
     end: number;
 }
 
-type FolderMap = Record<string, Folder>;
+export type FolderMap = Record<string, Folder>;
 
 const FOLDERS: FolderMap = {};
 

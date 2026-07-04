@@ -9,8 +9,8 @@ import { Logger } from "@utils/Logger";
 import { findByPropsLazy, proxyLazyWebpack } from "@webpack";
 import { FluxDispatcher, RestAPI, UserSettingsActionCreators, UserStore } from "@webpack/common";
 
-import { DEFAULT_FOLDER_STEP, Folder } from "./folders";
-import { FolderPreviewGif, GifMap, RawGif } from "./types";
+import { DEFAULT_FOLDER_STEP, Folder, FolderMap, getFolders } from "./folders";
+import { FolderPreviewGif, GifMap, RawGif, TrendingCategory } from "./types";
 import { searchProtoClassField } from "./utils";
 
 const FrecencyAC = proxyLazyWebpack(() => UserSettingsActionCreators.FrecencyUserSettingsActionCreators);
@@ -21,9 +21,38 @@ let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 const folderGifPreviews = new Map<number, FolderPreviewGif>();
 
-export const getFolderPreviewGifs = () => folderGifPreviews;
+export function getFolderPreviewGifs(folders: FolderMap) {
+    const categories: TrendingCategory[] = []
+    for (const { idx, name } of Object.values(folders)) {
+        const gif = folderGifPreviews.get(idx);
+
+        categories.push({
+            name: name,
+            type: "Favorites",
+            src: gif?.src ?? "",
+            format: gif?.format ?? 1
+        })
+    }
+
+    return categories;
+}
+
 function setFolderPreview(idx: number, preview: FolderPreviewGif) {
     folderGifPreviews.set(idx, preview);
+}
+
+export function getFolderPreviewGifsEx() {
+    const allGifs = getAllLocalGifs();
+    const folders = getFolders();
+    if (!allGifs || Object.keys(folders).length === 0) return {}
+
+    const needPreview = new Set(
+      Object.values(folders).map(folder => Math.floor(folder.start / DEFAULT_FOLDER_STEP))
+    );
+
+    console.log("fuckders:", needPreview);
+
+
 }
 
 // We are keeping a local copy of the remote gifs, because the local one gets modified with the new orders
@@ -115,7 +144,6 @@ export async function addLocalGif(folder: Folder, rawGif: RawGif) {
     const nextOrder = getNextOrderForGif(folder, allGifs);
     allGifs[url] = { ...rest, order: nextOrder };
 
-    console.log("SAVING ALL OF THE GIFS: ", allGifs);
     await updateLocalGifs(allGifs);
     refreshLocalStaleGifs(); // reschedule with new expiry
 
@@ -131,6 +159,8 @@ export async function deleteLocalGif(rawGif: RawGif) {
         await updateLocalGifs(allGifs);
     }
 
+    // rebuild previews from scratch
+    await setFolderPreviewGifs(allGifs);
     return allGifs;
 }
 
@@ -147,7 +177,6 @@ export async function getAllRemoteGifs(): Promise<GifMap | undefined> {
     const bytes = Uint8Array.from(atob(body.settings), c => c.charCodeAt(0));
     const end = FrecencyAC.ProtoClass.fromBinary(bytes, BINARY_READ_OPTIONS);
 
-    console.log("Remote gifs: ", end);
     if (!end.favoriteGifs || !end.favoriteGifs.gifs)
         return undefined;
 
@@ -221,7 +250,6 @@ export async function refreshLocalStaleGifs() {
 export async function flushRemoteGifs() {
     remoteTimer = null;
 
-    console.log("Flushing remote gifs")
     const proto = generateProtoFromGifs(remoteGifs);
 
     // updateAsync does a local update that causes an extra flicker, so we call markDirty instead.
@@ -234,12 +262,7 @@ export async function getAllLocalGifs(): Promise<GifMap | undefined> {
     if (!key) return undefined;
 
     const storedGifs: GifMap | undefined = await DataStore.get(key);
-    if (!storedGifs) {
-        new Logger("GifFolders").error("Failed to get the gifs from DB");
-        return;
-    }
-
-    return storedGifs;
+    return storedGifs ?? {};
 }
 
 

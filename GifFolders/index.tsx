@@ -5,7 +5,8 @@
  */
 
 import { ApplicationCommandInputType, ApplicationCommandOptionType } from "@api/Commands";
-import definePlugin from "@utils/types";
+import { definePluginSettings } from "@api/Settings";
+import definePlugin, { OptionType } from "@utils/types";
 
 import { AddFolder, DeleteFolder, Folder, getFolders, initializeFolder, RenameFolder, SwapFolder } from "./folders";
 import { cleanGif, getFolderPreviewGifs, importGifsFromDiscord, refreshLocalStaleGifs, showRemoteGifs, showSelectedGifs, syncLocalGifs, syncRemoteGifs } from "./gifStore";
@@ -16,9 +17,19 @@ import { grabGifProp } from "./utils";
 let LAST_VISITED_FOLDER: Folder | undefined = undefined;
 let IS_READY = false;
 
+const settings = definePluginSettings({
+    overwriteTrending: {
+        type: OptionType.BOOLEAN,
+        description: "Disable Discord's trending GIFs",
+        default: true,
+        restartNeeded: false
+    }
+})
+
 export default definePlugin({
     name: "GifFolders",
     description: "Allows you to organize your gifs into folders. Start by running (/AddFolder)",
+    settings,
     authors: [
         {
             name: "Madachi",
@@ -158,35 +169,23 @@ export default definePlugin({
     },
 
     // TODO: make it an option if user wants to keep the default trending categories
-    getTrendingCategories(trendingArray) {
+    getTrendingCategories(trendingArray: Array<TrendingCategory>) {
         if (!IS_READY) return trendingArray;
-        console.log("is this really mepty: ", trendingArray);
+        if (trendingArray.length === 0) return trendingArray; // populating this before discord does breaks it
 
-        const categories: Array<TrendingCategory> = [];
 
         const folders = getFolders();
         if (Object.keys(folders).length === 0) return trendingArray; // Should probably display some text mentioning how to add folder
 
-        const folderPreviews = getFolderPreviewGifs();
-        for (const { idx, name } of Object.values(folders)) {
-            const gif = folderPreviews.get(idx);
-            categories.push({
-                name: name,
-                src: gif?.src ?? "",
-                type: "Favorites",
-                format: gif?.format ?? 1,
-            });
-        }
+        const categories = getFolderPreviewGifs(folders);
+        if (!settings.store.overwriteTrending) categories.push(...trendingArray);
 
-        if (true) categories.push(...trendingArray);
-        console.log("TRENDING: ", trendingArray, " CATEGORIES: ", categories);
         return categories
     },
 
     async handleSelectItem(type: string, name: string) {
         if (!IS_READY) return;
 
-        console.log("type: ", type, " name: ", name);
         const folders = getFolders();
         const visited = folders[name];
 

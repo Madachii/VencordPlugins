@@ -4,15 +4,15 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { DeleteIcon } from "@components/Icons";
 import { DiscordIcon } from "@plugins/betterSessions/components/icons";
 import { ContextMenuApi, FluxDispatcher, Menu, showToast } from "@webpack/common";
 import { ComponentType, ReactNode } from "react";
 
 import { Folder } from "./folders";
 import { addLocalGif, addRemoteGif, deleteLocalGif, deleteRemoteGif, } from "./gifStore";
-import { FolderIcon, TrashIcon } from "./icons";
+import { FolderIcon} from "./icons";
 import { AddGifMenuResult, RawGif } from "./types";
-import { DeleteIcon } from "@components/Icons";
 
 class MenuBuilder {
     private items: ReactNode[] = [];

@@ -6,7 +6,7 @@
 
 import { Folder } from "./folders";
 
-export interface TrendingCategory {
+export type TrendingCategory = {
     name: string;
     src: string;
     type: string;

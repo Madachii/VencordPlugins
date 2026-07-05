@@ -62,7 +62,6 @@ export function openGifMenu(e: React.UIEvent, gif: RawGif, folderMap: FolderMap)
         const builder = new MenuBuilder(() => resolve({}));
 
         builder.addFolder("discord", "Save to Discord", async () => {
-            console.log("Trying to save to discord!");
             await gifStore.addRemoteGif(gif);
 
             showToast("Saved to discord!");
@@ -71,7 +70,6 @@ export function openGifMenu(e: React.UIEvent, gif: RawGif, folderMap: FolderMap)
 
         for (const folder of Object.values(folderMap)) {
             builder.addFolder(folder.name, `Save to ${folder.name}`, async () => {
-                console.log("Trying to save to a folder!");
                 const result = await gifStore.addLocalGif(folder, gif);
 
                 showToast(`Saved to ${folder.name}!`);
@@ -80,7 +78,6 @@ export function openGifMenu(e: React.UIEvent, gif: RawGif, folderMap: FolderMap)
         }
 
         builder.addFolder("delete", "Delete", async () => {
-            console.log("Trying to delete a gif!");
             const result = await gifStore.deleteLocalGif(gif);
             await gifStore.deleteRemoteGif(gif);
 

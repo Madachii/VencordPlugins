@@ -10,9 +10,9 @@ import { parseUrl } from "@utils/misc";
 import { findByPropsLazy, proxyLazyWebpack } from "@webpack";
 import { FluxDispatcher, RestAPI, UserSettingsActionCreators, UserStore } from "@webpack/common";
 
+import { DEFAULT_FOLDER_STEP, Folder, FolderMap } from "./folderStore";
 import { FolderPreviewGif, GifRecord, RawGif, TrendingCategory } from "./types";
 import { searchProtoClassField } from "./utils";
-import { FolderMap } from "./folderStore";
 
 const FrecencyAC = proxyLazyWebpack(() => UserSettingsActionCreators.FrecencyUserSettingsActionCreators);
 const FavoriteAC = proxyLazyWebpack(() => searchProtoClassField("favoriteGifs", FrecencyAC.ProtoClass));
@@ -107,6 +107,8 @@ export class GifStore {
         this.remoteGifs[url] = { ...rest, order };
 
         this.scheduleRemoteFlush();
+
+        this.logger?.info("Adding remote gif: ", gif);
     }
 
     public deleteRemoteGif(rawGif: RawGif) {
@@ -114,6 +116,8 @@ export class GifStore {
 
         delete this.remoteGifs[rawGif.url];
         this.scheduleRemoteFlush();
+
+        this.logger?.info("Deleting remote gif: ", rawGif)
     }
 
     public async showRemoteGifs() {
@@ -191,7 +195,11 @@ export class GifStore {
         }
 
         await this.setFolderPreviewGifs(allGifs);
+
+        this.logger?.info("Deleted local gif: ", allGifs);
         return allGifs;
+
+
     }
 
     public async getAllLocalGifs() {
@@ -221,11 +229,15 @@ export class GifStore {
     }
 
     private async updateLocalGifs(gifs: GifRecord) {
+        if (this.localGifsCache) return this.localGifsCache;
+
         const key = this.getKey();
         if (!key) return;
 
         await DataStore.set(key, gifs);
         this.localGifsCache = gifs;
+
+        this.logger?.info("Updating local gifs with: ", gifs);
     }
 
     private getNextOrderForGif(folder: Folder, allGifs: GifRecord): number {
@@ -268,6 +280,8 @@ export class GifStore {
             partial: true,
             settings: { type: 2, proto },
         });
+
+        this.logger?.info("Dispatched the following gifs: ", gifs);
     }
 
     // gifs we grab have an expiry date of 24h
@@ -301,6 +315,8 @@ export class GifStore {
             () => void this.refreshLocalStaleGifs(),
             Math.max(msTillNextRefresh, 30_000),
         );
+
+        this.logger?.info("Setting next stale refresh timer at: ", Math.max(msTillNextRefresh, 30_000));
     }
 
     private async refreshSrcs(gifs: GifRecord): Promise<GifRecord> {

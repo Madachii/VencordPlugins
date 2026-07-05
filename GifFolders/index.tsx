@@ -6,6 +6,7 @@
 
 import { ApplicationCommandInputType, ApplicationCommandOptionType } from "@api/Commands";
 import { definePluginSettings } from "@api/Settings";
+import { Logger } from "@utils/Logger";
 import definePlugin, { OptionType } from "@utils/types";
 
 import { Folder, folderStore } from "./folderStore";
@@ -132,7 +133,8 @@ export default definePlugin({
     },
 
     async start() {
-        IS_READY = (await folderStore.init()) && (await gifStore.init());
+        const logger = new Logger("GifFolders");
+        IS_READY = (await folderStore.init(logger)) && (await gifStore.init(logger));
     },
 
     async stop() {

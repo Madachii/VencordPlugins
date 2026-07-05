@@ -37,3 +37,8 @@ export function searchProtoClassField(localName: string, protoClass: any) {
     const fieldGetter = Object.values(field).find(value => typeof value === "function") as any;
     return fieldGetter?.();
 }
+
+export function cleanGif(gif: RawGif) {
+    const cleaned = { ...gif, url: gif.url.split("?")[0] };
+    return cleaned;
+}

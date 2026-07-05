@@ -15,7 +15,7 @@ export type Folder = {
     name: string;
     start: number;
     end: number;
-}
+};
 
 export type FolderMap = Record<string, Folder>;
 
@@ -41,27 +41,25 @@ async function updateFolders(folders: FolderMap) {
 export async function AddFolder(opts: CommandArgument[], cmd?: CommandContext) {
     if (!opts || opts.length < 1) return;
 
-    let { value } = opts[0];
-
-    value = value.toLowerCase();
-    if (FOLDERS[value]) {
-        showToast(`You already have a folder called ${value}!: `);
+    const folder_name = findOption(opts, "folder_name", "")?.toLowerCase();
+    if (FOLDERS[folder_name]) {
+        showToast(`You already have a folder called ${folder_name}!: `);
         return;
     }
 
     const folderValues = Object.values(FOLDERS);
-    const afterLast = (folderValues.at(-1)?.idx ?? -1) + 1;
+    const afterLast = folderValues.reduce((max, folder) => Math.max(max, folder.idx), - 1) + 1;
     const folder = {
         idx: afterLast,
-        name: value,
+        name: folder_name,
         start: afterLast * DEFAULT_FOLDER_STEP + 1,
         end: afterLast * DEFAULT_FOLDER_STEP + DEFAULT_FOLDER_STEP,
     };
 
-    FOLDERS[value] = folder;
+    FOLDERS[folder_name] = folder;
     await updateFolders(FOLDERS);
 
-    showToast(`Succesfully created a new folder called: ${value}! `);
+    showToast(`Succesfully created a new folder called: ${folder_name}! `);
 }
 
 export async function RenameFolder(opts: CommandArgument[], cmd?: CommandContext) {
@@ -111,10 +109,7 @@ export async function SwapFolder(opts: CommandArgument[], cmd?: CommandContext) 
         return;
     }
 
-    // Swap idx and derived ranges
     [first.idx, second.idx] = [second.idx, first.idx];
-    [first.start, second.start] = [second.start, first.start];
-    [first.end, second.end] = [second.end, first.end];
 
     await updateFolders(FOLDERS);
     showToast(`Swapped ${firstName} with ${secondName}!`);

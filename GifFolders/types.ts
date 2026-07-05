@@ -11,7 +11,7 @@ export type TrendingCategory = {
     src: string;
     type: string;
     format: number;
-}
+};
 
 export interface FolderPreviewGif {
     src: string;
@@ -19,11 +19,11 @@ export interface FolderPreviewGif {
 }
 
 export interface AddGifMenuResult {
-    gifs?: GifMap;
+    gifs?: GifRecord;
     folder?: Folder;
 }
 
-export type GifMap = Record<string, GifData>;
+export type GifRecord = Record<string, GifData>;
 
 export interface GifImportOptions {
     importNew: boolean;

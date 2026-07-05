@@ -8,8 +8,8 @@ import { DeleteIcon } from "@components/Icons";
 import { ContextMenuApi, FluxDispatcher, Menu, showToast } from "@webpack/common";
 import { ComponentType, ReactNode } from "react";
 
-import { Folder } from "./folders";
-import { gifStore } from "./gifStoreEx";
+import { FolderMap } from "./folderStore";
+import { gifStore } from "./gifStore";
 import { DiscordIcon, FolderIcon } from "./icons";
 import { AddGifMenuResult, RawGif } from "./types";
 
@@ -57,7 +57,7 @@ class MenuBuilder {
     }
 }
 
-export function openGifMenu(e: React.UIEvent, gif: RawGif, folderMap: Record<string, Folder>): Promise<AddGifMenuResult> | undefined {
+export function openGifMenu(e: React.UIEvent, gif: RawGif, folderMap: FolderMap): Promise<AddGifMenuResult> | undefined {
     return new Promise(resolve => {
         const builder = new MenuBuilder(() => resolve({}));
 

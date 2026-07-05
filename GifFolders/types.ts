@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { Folder } from "./folders";
+import { Folder } from "./folderStore";
+
 
 export type TrendingCategory = {
     name: string;

@@ -10,9 +10,9 @@ import { parseUrl } from "@utils/misc";
 import { findByPropsLazy, proxyLazyWebpack } from "@webpack";
 import { FluxDispatcher, RestAPI, UserSettingsActionCreators, UserStore } from "@webpack/common";
 
-import { DEFAULT_FOLDER_STEP, Folder, FolderMap } from "./folders";
 import { FolderPreviewGif, GifRecord, RawGif, TrendingCategory } from "./types";
 import { searchProtoClassField } from "./utils";
+import { FolderMap } from "./folderStore";
 
 const FrecencyAC = proxyLazyWebpack(() => UserSettingsActionCreators.FrecencyUserSettingsActionCreators);
 const FavoriteAC = proxyLazyWebpack(() => searchProtoClassField("favoriteGifs", FrecencyAC.ProtoClass));
@@ -204,11 +204,11 @@ export class GifStore {
         return this.localGifsCache;
     }
 
-    public async syncLocalGifs(serverGifs: GifRecord) {
+    public async syncLocalGifs(protoGifs: GifRecord) {
         const storedGifs = await this.getAllLocalGifs();
         if (!storedGifs) return;
 
-        for (const [url, value] of Object.entries(serverGifs)) {
+        for (const [url, value] of Object.entries(protoGifs)) {
             const cleaned = this.cleanGif({ ...value, url });
             if (!cleaned.url || !(cleaned.url in storedGifs)) continue;
 

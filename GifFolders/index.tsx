@@ -8,8 +8,8 @@ import { ApplicationCommandInputType, ApplicationCommandOptionType } from "@api/
 import { definePluginSettings } from "@api/Settings";
 import definePlugin, { OptionType } from "@utils/types";
 
-import { AddFolder, DeleteFolder, Folder, getFolders, initializeFolder, RenameFolder, SwapFolder } from "./folders";
-import { gifStore } from "./gifStoreEx";
+import { Folder, folderStore } from "./folderStore";
+import { gifStore } from "./gifStore";
 import { openGifMenu } from "./menus";
 import { TrendingCategory } from "./types";
 import { cleanGif, grabGifProp } from "./utils";
@@ -49,7 +49,7 @@ export default definePlugin({
                     required: true
                 },
             ],
-            execute: async (opts, cmd) => AddFolder(opts, cmd),
+            execute: async (opts, cmd) => folderStore.addFolder(opts, cmd),
         },
         {
             inputType: ApplicationCommandInputType.BUILT_IN,
@@ -69,7 +69,7 @@ export default definePlugin({
                     required: true
                 },
             ],
-            execute: async (opts, cmd) => RenameFolder(opts, cmd),
+            execute: async (opts, cmd) => folderStore.renameFolder(opts, cmd),
         },
         {
             inputType: ApplicationCommandInputType.BUILT_IN,
@@ -89,7 +89,7 @@ export default definePlugin({
                     required: true,
                 },
             ],
-            execute: async (opts, cmd) => SwapFolder(opts, cmd),
+            execute: async (opts, cmd) => folderStore.swapFolder(opts, cmd),
         },
         {
             inputType: ApplicationCommandInputType.BUILT_IN,
@@ -102,7 +102,7 @@ export default definePlugin({
                     type: ApplicationCommandOptionType.STRING,
                 },
             ],
-            execute: async (opts, cmd) => DeleteFolder(opts, cmd),
+            execute: async (opts, cmd) => folderStore.deleteFolder(opts, cmd),
         },
     ],
 
@@ -132,9 +132,12 @@ export default definePlugin({
     },
 
     async start() {
-        // IS_READY = (await initializeFolder()) && (await importGifsFromDiscord());
-        IS_READY = (await initializeFolder()) && await gifStore.init();
-        // refreshLocalStaleGifs()
+        IS_READY = (await folderStore.init()) && (await gifStore.init());
+    },
+
+    async stop() {
+        folderStore.dispose();
+        gifStore.dispose();
     },
 
     patches: [
@@ -168,7 +171,7 @@ export default definePlugin({
         if (!gif) return original(e);
 
         const cleanedGif = cleanGif(gif);
-        const result = await openGifMenu(e, cleanedGif, getFolders());
+        await openGifMenu(e, cleanedGif, folderStore.getFolders());
 
         if (LAST_VISITED_FOLDER) await gifStore.showFolderGifs(LAST_VISITED_FOLDER);
         else gifStore.showRemoteGifs();
@@ -180,7 +183,7 @@ export default definePlugin({
         if (trendingArray.length === 0) return trendingArray; // populating this before discord does breaks it
 
 
-        const folders = getFolders();
+        const folders = folderStore.getFolders();
         if (Object.keys(folders).length === 0) return trendingArray; // Should probably display some text mentioning how to add folder
 
         const categories = gifStore.getFolderPreviewGifs(folders);
@@ -193,7 +196,7 @@ export default definePlugin({
         if (!IS_READY) return;
         if (type !== "Favorites") return;
 
-        const folders = getFolders();
+        const folders = folderStore.getFolders();
         const visited = folders[name];
 
         LAST_VISITED_FOLDER = visited;

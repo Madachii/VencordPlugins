@@ -9,10 +9,10 @@ import { definePluginSettings } from "@api/Settings";
 import definePlugin, { OptionType } from "@utils/types";
 
 import { AddFolder, DeleteFolder, Folder, getFolders, initializeFolder, RenameFolder, SwapFolder } from "./folders";
-import { cleanGif, getFolderPreviewGifs, importGifsFromDiscord, refreshLocalStaleGifs, showRemoteGifs, showSelectedGifs, syncLocalGifs, syncRemoteGifs } from "./gifStore";
+import { gifStore } from "./gifStoreEx";
 import { openGifMenu } from "./menus";
 import { TrendingCategory } from "./types";
-import { grabGifProp } from "./utils";
+import { cleanGif, grabGifProp } from "./utils";
 
 let LAST_VISITED_FOLDER: Folder | undefined = undefined;
 let IS_READY = false;
@@ -24,7 +24,7 @@ const settings = definePluginSettings({
         default: true,
         restartNeeded: false
     }
-})
+});
 
 export default definePlugin({
     name: "GifFolders",
@@ -46,6 +46,7 @@ export default definePlugin({
                     name: "folder_name",
                     description: "Give the folder a name!",
                     type: ApplicationCommandOptionType.STRING,
+                    required: true
                 },
             ],
             execute: async (opts, cmd) => AddFolder(opts, cmd),
@@ -59,11 +60,13 @@ export default definePlugin({
                     name: "old_name",
                     description: "Name of the already existing folder",
                     type: ApplicationCommandOptionType.STRING,
+                    required: true
                 },
                 {
                     name: "new_name",
                     description: "The new name to change it into!",
                     type: ApplicationCommandOptionType.STRING,
+                    required: true
                 },
             ],
             execute: async (opts, cmd) => RenameFolder(opts, cmd),
@@ -77,11 +80,13 @@ export default definePlugin({
                     name: "first",
                     description: "First folder name",
                     type: ApplicationCommandOptionType.STRING,
+                    required: true,
                 },
                 {
                     name: "second",
                     description: "Second folder name",
                     type: ApplicationCommandOptionType.STRING,
+                    required: true,
                 },
             ],
             execute: async (opts, cmd) => SwapFolder(opts, cmd),
@@ -107,7 +112,7 @@ export default definePlugin({
         // also happens when the user clears their gif search but it doesnt affect it
         GIF_PICKER_QUERY({ query }) {
             if (!IS_READY) return;
-            if (!query) showRemoteGifs();
+            if (!query) gifStore.showRemoteGifs();
         },
 
 
@@ -120,15 +125,16 @@ export default definePlugin({
             const gifs = event.settings?.proto?.favoriteGifs?.gifs;
             if (!gifs) return;
 
-            syncRemoteGifs(gifs);
-            syncLocalGifs(gifs);
-            if (LAST_VISITED_FOLDER) showSelectedGifs(LAST_VISITED_FOLDER);
+            gifStore.syncRemoteGifs(gifs);
+            gifStore.syncLocalGifs(gifs);
+            if (LAST_VISITED_FOLDER) gifStore.showFolderGifs(LAST_VISITED_FOLDER);
         },
     },
 
     async start() {
-        IS_READY = (await initializeFolder()) && (await importGifsFromDiscord());
-        refreshLocalStaleGifs()
+        // IS_READY = (await initializeFolder()) && (await importGifsFromDiscord());
+        IS_READY = (await initializeFolder()) && await gifStore.init();
+        // refreshLocalStaleGifs()
     },
 
     patches: [
@@ -164,8 +170,8 @@ export default definePlugin({
         const cleanedGif = cleanGif(gif);
         const result = await openGifMenu(e, cleanedGif, getFolders());
 
-        if (LAST_VISITED_FOLDER) await showSelectedGifs(LAST_VISITED_FOLDER);
-        else showRemoteGifs();
+        if (LAST_VISITED_FOLDER) await gifStore.showFolderGifs(LAST_VISITED_FOLDER);
+        else gifStore.showRemoteGifs();
     },
 
     // TODO: make it an option if user wants to keep the default trending categories
@@ -177,20 +183,21 @@ export default definePlugin({
         const folders = getFolders();
         if (Object.keys(folders).length === 0) return trendingArray; // Should probably display some text mentioning how to add folder
 
-        const categories = getFolderPreviewGifs(folders);
+        const categories = gifStore.getFolderPreviewGifs(folders);
         if (!settings.store.overwriteTrending) categories.push(...trendingArray);
 
-        return categories
+        return categories;
     },
 
     async handleSelectItem(type: string, name: string) {
         if (!IS_READY) return;
+        if (type !== "Favorites") return;
 
         const folders = getFolders();
         const visited = folders[name];
 
         LAST_VISITED_FOLDER = visited;
-        if (visited) showSelectedGifs(visited);
-        else showRemoteGifs();
+        if (visited) gifStore.showFolderGifs(visited);
+        else gifStore.showRemoteGifs();
     },
 });

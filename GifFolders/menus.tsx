@@ -5,18 +5,22 @@
  */
 
 import { DeleteIcon } from "@components/Icons";
-import { DiscordIcon } from "@plugins/betterSessions/components/icons";
 import { ContextMenuApi, FluxDispatcher, Menu, showToast } from "@webpack/common";
 import { ComponentType, ReactNode } from "react";
 
 import { Folder } from "./folders";
-import { addLocalGif, addRemoteGif, deleteLocalGif, deleteRemoteGif, } from "./gifStore";
-import { FolderIcon} from "./icons";
+import { gifStore } from "./gifStoreEx";
+import { DiscordIcon, FolderIcon } from "./icons";
 import { AddGifMenuResult, RawGif } from "./types";
 
 class MenuBuilder {
     private items: ReactNode[] = [];
-    private onClose = () => FluxDispatcher.dispatch({ type: "CONTEXT_MENU_CLOSE" });
+    private onClose: () => void;
+    private pendingAction: Promise<void> | null = null;
+
+    constructor(onCloseCallback: () => void) {
+        this.onClose = () => onCloseCallback;
+    }
 
     addFolder(name: string, label: string, action: () => Promise<void>, icon: ComponentType<any>, color: string = "brand") {
         this.items.push(
@@ -25,13 +29,10 @@ class MenuBuilder {
                 id={`favorite-folder-${name}`}
                 label={`${label}`}
                 color={color}
-                action={action}
+                action={() => {
+                    this.pendingAction = action();
+                }}
                 icon={icon}
-                // icon={() =>
-                //  <svg width="16" height="16" viewBox="0 0 24 24">
-                //     <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
-                //     </svg>
-                // }
             />
         );
         return this;
@@ -39,7 +40,17 @@ class MenuBuilder {
 
     build() {
         return (
-            <Menu.Menu navId="gif-folder-menu" onClose={this.onClose}>
+            <Menu.Menu
+                navId="gif-folder-menu"
+                onClose={() => {
+                    FluxDispatcher.dispatch({ type: "CONTEXT_MENU_CLOSE" });
+                    if (this.pendingAction) {
+                        this.pendingAction.finally(() => this.onClose());
+                    } else {
+                        this.onClose();
+                    }
+                }}
+            >
                 {this.items}
             </Menu.Menu>
         );
@@ -48,11 +59,11 @@ class MenuBuilder {
 
 export function openGifMenu(e: React.UIEvent, gif: RawGif, folderMap: Record<string, Folder>): Promise<AddGifMenuResult> | undefined {
     return new Promise(resolve => {
-        const builder = new MenuBuilder();
+        const builder = new MenuBuilder(() => resolve({}));
 
         builder.addFolder("discord", "Save to Discord", async () => {
             console.log("Trying to save to discord!");
-            await addRemoteGif(gif);
+            await gifStore.addRemoteGif(gif);
 
             showToast("Saved to discord!");
             resolve({});
@@ -61,7 +72,7 @@ export function openGifMenu(e: React.UIEvent, gif: RawGif, folderMap: Record<str
         for (const folder of Object.values(folderMap)) {
             builder.addFolder(folder.name, `Save to ${folder.name}`, async () => {
                 console.log("Trying to save to a folder!");
-                const result = await addLocalGif(folder, gif);
+                const result = await gifStore.addLocalGif(folder, gif);
 
                 showToast(`Saved to ${folder.name}!`);
                 resolve({ gifs: result });
@@ -70,8 +81,8 @@ export function openGifMenu(e: React.UIEvent, gif: RawGif, folderMap: Record<str
 
         builder.addFolder("delete", "Delete", async () => {
             console.log("Trying to delete a gif!");
-            const result = await deleteLocalGif(gif);
-            await deleteRemoteGif(gif);
+            const result = await gifStore.deleteLocalGif(gif);
+            await gifStore.deleteRemoteGif(gif);
 
             showToast("Gif deleted!");
             resolve({ gifs: result });

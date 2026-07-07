@@ -60,9 +60,9 @@ export class GifStore {
     }
 
 
-    public getFolderPreviewGifs(folders: FolderMap) {
+    public getFolderPreviewGifs(folders?: FolderMap) {
         const categories: TrendingCategory[] = [];
-        for (const folder of Object.values(folders).sort((a, b) => a.idx - b.idx)) {
+        for (const folder of Object.values(folders ?? {}).sort((a, b) => a.idx - b.idx)) {
             const preview = this.previews.get(folder.idx);
             categories.push({
                 name: folder.name,

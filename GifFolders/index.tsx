@@ -101,6 +101,7 @@ export default definePlugin({
                     name: "folder_name",
                     description: "Write the name of the folder you want to delete",
                     type: ApplicationCommandOptionType.STRING,
+                    required: true,
                 },
             ],
             execute: async (opts, cmd) => folderStore.deleteFolder(opts, cmd),
@@ -179,19 +180,15 @@ export default definePlugin({
         else gifStore.showRemoteGifs();
     },
 
-    // TODO: make it an option if user wants to keep the default trending categories
     getTrendingCategories(trendingArray: Array<TrendingCategory>) {
         if (!IS_READY) return trendingArray;
         if (trendingArray.length === 0) return trendingArray; // populating this before discord does breaks it
 
-
         const folders = folderStore.getFolders();
-        if (Object.keys(folders).length === 0) return trendingArray; // Should probably display some text mentioning how to add folder
-
         const categories = gifStore.getFolderPreviewGifs(folders);
         if (!settings.store.overwriteTrending) categories.push(...trendingArray);
 
-        return categories;
+        return categories.length > 0 ? categories : [{}]; // if it's completly empty, even the Favorites default one is missing
     },
 
     async handleSelectItem(type: string, name: string) {
